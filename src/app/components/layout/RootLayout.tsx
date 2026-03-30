@@ -31,25 +31,14 @@ export function RootLayout() {
     const isDark = savedTheme === "dark";
 
     setDarkMode(isDark);
-
-    if (isDark) {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
+    document.documentElement.classList.toggle("dark", isDark);
   }, []);
 
   const toggleTheme = () => {
     const nextTheme = !darkMode;
     setDarkMode(nextTheme);
-
-    if (nextTheme) {
-      document.documentElement.classList.add("dark");
-      localStorage.setItem("timecore-theme", "dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-      localStorage.setItem("timecore-theme", "light");
-    }
+    document.documentElement.classList.toggle("dark", nextTheme);
+    localStorage.setItem("timecore-theme", nextTheme ? "dark" : "light");
   };
 
   return (
@@ -122,11 +111,15 @@ export function RootLayout() {
               onClick={toggleTheme}
               className="p-2 rounded-lg text-slate-400 dark:text-slate-300 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition"
               aria-label="Toggle theme"
+              type="button"
             >
               {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
 
-            <button className="relative text-slate-400 dark:text-slate-300 hover:text-slate-600 dark:hover:text-white transition">
+            <button
+              type="button"
+              className="relative text-slate-400 dark:text-slate-300 hover:text-slate-600 dark:hover:text-white transition"
+            >
               <Bell className="w-5 h-5" />
               <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-red-500"></span>
             </button>
