@@ -224,10 +224,6 @@ export function Undertime() {
                         <option value="PM">PM</option>
                       </select>
                     </div>
-
-                    <p className="text-xs text-slate-400 mt-2">
-                      Example: 8:00 to 12:00 AM or 1:00 to 5:00 PM
-                    </p>
                   </div>
 
                   <div>
