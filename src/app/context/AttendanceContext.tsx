@@ -56,7 +56,10 @@ interface AttendanceState {
   absences: AbsentRecord[];
   manualUndertimes: UndertimeRecord[];
   handleFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  addExemption: (ex: Omit<Exemption, "id">) => void;
+  addExemption: (ex: Omit<Exemption, "id">) => {
+    success: boolean;
+    message: string;
+  };
   addAbsence: (ab: Omit<AbsentRecord, "id">) => void;
   addUndertime: (ut: Omit<UndertimeRecord, "id">) => void;
 }
@@ -101,7 +104,7 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
             const dateTime = new Date(row[4]);
             if (Number.isNaN(dateTime.getTime())) continue;
 
-            const dayOfWeek = dateTime.getDay(); // 0 = Sunday, 6 = Saturday
+            const dayOfWeek = dateTime.getDay();
             const hours = dateTime.getHours();
             const minutes = dateTime.getMinutes();
             const seconds = dateTime.getSeconds();
@@ -113,10 +116,9 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
             let secondsLate = 0;
             let totalSecondsLateValue = 0;
 
-            // Monday to Friday
             if (dayOfWeek >= 1 && dayOfWeek <= 5) {
-              const officialTime = 8 * 3600; // 8:00 AM
-              const graceThreshold = 8 * 3600 + 5 * 60; // 8:05 AM
+              const officialTime = 8 * 3600;
+              const graceThreshold = 8 * 3600 + 5 * 60;
 
               const exactHourUndertime =
                 minutes === 0 &&
@@ -124,7 +126,7 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
                 (hours === 9 || hours === 10 || hours === 11);
 
               const afternoonUndertime =
-                totalSeconds >= 12 * 3600 && totalSeconds <= 17 * 3600; // 12:00 PM to 5:00 PM
+                totalSeconds >= 12 * 3600 && totalSeconds <= 17 * 3600;
 
               if (exactHourUndertime || afternoonUndertime) {
                 isUndertime = true;
@@ -134,11 +136,9 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
                 minutesLate = Math.floor(totalSecondsLateValue / 60);
                 secondsLate = totalSecondsLateValue % 60;
               }
-            }
-            // Saturday
-            else if (dayOfWeek === 6) {
-              const officialTime = 7 * 3600; // 7:00 AM
-              const graceThreshold = 7 * 3600 + 5 * 60; // 7:05 AM
+            } else if (dayOfWeek === 6) {
+              const officialTime = 7 * 3600;
+              const graceThreshold = 7 * 3600 + 5 * 60;
 
               const exactHourUndertime =
                 minutes === 0 &&
@@ -146,7 +146,7 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
                 (hours === 8 || hours === 9 || hours === 10 || hours === 11);
 
               const afternoonUndertime =
-                totalSeconds >= 12 * 3600 && totalSeconds <= 17 * 3600; // 12:00 PM to 5:00 PM
+                totalSeconds >= 12 * 3600 && totalSeconds <= 17 * 3600;
 
               if (exactHourUndertime || afternoonUndertime) {
                 isUndertime = true;
@@ -211,6 +211,22 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const addExemption = (ex: Omit<Exemption, "id">) => {
+    const exemptionDate = new Date(ex.date).toLocaleDateString("en-US");
+    const normalizedExemptionName = ex.name.trim().toLowerCase();
+
+    const matchingLateRecords = lateRecords.filter(
+      (record) =>
+        record.name.trim().toLowerCase() === normalizedExemptionName &&
+        record.date === exemptionDate
+    );
+
+    if (matchingLateRecords.length === 0) {
+      return {
+        success: false,
+        message: "No matching late record found for this employee and date.",
+      };
+    }
+
     const newExemption: Exemption = {
       ...ex,
       id: Math.random().toString(36).slice(2, 11),
@@ -218,49 +234,41 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
 
     setExemptions((prev) => [newExemption, ...prev]);
 
-    const exemptionDate = new Date(ex.date).toLocaleDateString("en-US");
-    const normalizedExemptionName = ex.name.trim().toLowerCase();
-
-    setLateRecords((prevLateRecords) => {
-      const removedRecords = prevLateRecords.filter(
-        (record) =>
-          record.name.trim().toLowerCase() === normalizedExemptionName &&
-          record.date === exemptionDate
-      );
-
-      const updatedLateRecords = prevLateRecords.filter(
+    setLateRecords((prevLateRecords) =>
+      prevLateRecords.filter(
         (record) =>
           !(
             record.name.trim().toLowerCase() === normalizedExemptionName &&
             record.date === exemptionDate
           )
+      )
+    );
+
+    setLateSummary((prevSummary) => {
+      const removedCount = matchingLateRecords.length;
+      const removedMinutes = matchingLateRecords.reduce(
+        (sum, record) => sum + record.minutesLate,
+        0
       );
 
-      setLateSummary((prevSummary) => {
-        const removedCount = removedRecords.length;
-        const removedMinutes = removedRecords.reduce(
-          (sum, record) => sum + record.minutesLate,
-          0
-        );
-
-        const updatedSummary = prevSummary
-          .map((item) => {
-            if (item.name.trim().toLowerCase() === normalizedExemptionName) {
-              return {
-                ...item,
-                totalLates: Math.max(0, item.totalLates - removedCount),
-                totalMinutesLate: Math.max(0, item.totalMinutesLate - removedMinutes),
-              };
-            }
-            return item;
-          })
-          .filter((item) => item.totalLates > 0);
-
-        return updatedSummary;
-      });
-
-      return updatedLateRecords;
+      return prevSummary
+        .map((item) => {
+          if (item.name.trim().toLowerCase() === normalizedExemptionName) {
+            return {
+              ...item,
+              totalLates: Math.max(0, item.totalLates - removedCount),
+              totalMinutesLate: Math.max(0, item.totalMinutesLate - removedMinutes),
+            };
+          }
+          return item;
+        })
+        .filter((item) => item.totalLates > 0);
     });
+
+    return {
+      success: true,
+      message: "Exemption saved successfully.",
+    };
   };
 
   const addAbsence = (ab: Omit<AbsentRecord, "id">) => {

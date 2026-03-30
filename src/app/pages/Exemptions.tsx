@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ShieldCheck, Plus } from "lucide-react";
+import { ShieldCheck, Plus, AlertCircle, CheckCircle2 } from "lucide-react";
 import { useAttendance } from "../context/AttendanceContext";
 
 export function Exemptions() {
@@ -11,17 +11,40 @@ export function Exemptions() {
     date: "",
   });
 
+  const [feedback, setFeedback] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setFeedback(null);
 
     if (!formData.name || !formData.reason || !formData.date) {
+      setFeedback({
+        type: "error",
+        message: "Please complete employee name, date, and reason.",
+      });
       return;
     }
 
-    addExemption({
+    const result = addExemption({
       name: formData.name,
       reason: formData.reason,
       date: formData.date,
+    });
+
+    if (!result.success) {
+      setFeedback({
+        type: "error",
+        message: result.message,
+      });
+      return;
+    }
+
+    setFeedback({
+      type: "success",
+      message: result.message,
     });
 
     setFormData({
@@ -49,6 +72,23 @@ export function Exemptions() {
               </div>
               <h2 className="text-lg font-bold text-slate-900">Add Exemption</h2>
             </div>
+
+            {feedback && (
+              <div
+                className={`mb-4 rounded-lg border px-3 py-3 text-sm flex items-start gap-2 ${
+                  feedback.type === "success"
+                    ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                    : "bg-red-50 border-red-200 text-red-700"
+                }`}
+              >
+                {feedback.type === "success" ? (
+                  <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                )}
+                <span>{feedback.message}</span>
+              </div>
+            )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
