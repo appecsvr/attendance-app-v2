@@ -97,11 +97,11 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
             const row = jsonData[i];
             if (!row[2] || !row[4]) continue;
 
-            const name = String(row[2]);
+            const name = String(row[2]).trim();
             const dateTime = new Date(row[4]);
             if (Number.isNaN(dateTime.getTime())) continue;
 
-            const dayOfWeek = dateTime.getDay();
+            const dayOfWeek = dateTime.getDay(); // 0 = Sunday, 6 = Saturday
             const hours = dateTime.getHours();
             const minutes = dateTime.getMinutes();
             const seconds = dateTime.getSeconds();
@@ -113,31 +113,46 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
             let secondsLate = 0;
             let totalSecondsLateValue = 0;
 
+            // Monday to Friday
             if (dayOfWeek >= 1 && dayOfWeek <= 5) {
-              const lateThreshold = 8 * 3600 + 6 * 60;
-              const exactHourUndertime =
-                minutes === 0 && seconds === 0 && (hours === 9 || hours === 10 || hours === 11);
-              const noonToOne = totalSeconds >= 12 * 3600 && totalSeconds <= 13 * 3600;
+              const officialTime = 8 * 3600; // 8:00 AM
+              const graceThreshold = 8 * 3600 + 5 * 60; // 8:05 AM
 
-              if (exactHourUndertime || noonToOne) {
+              const exactHourUndertime =
+                minutes === 0 &&
+                seconds === 0 &&
+                (hours === 9 || hours === 10 || hours === 11);
+
+              const afternoonUndertime =
+                totalSeconds >= 12 * 3600 && totalSeconds <= 17 * 3600; // 12:00 PM to 5:00 PM
+
+              if (exactHourUndertime || afternoonUndertime) {
                 isUndertime = true;
-              } else if (totalSeconds >= lateThreshold) {
+              } else if (totalSeconds > graceThreshold) {
                 isLate = true;
-                totalSecondsLateValue = totalSeconds - lateThreshold;
+                totalSecondsLateValue = totalSeconds - officialTime;
                 minutesLate = Math.floor(totalSecondsLateValue / 60);
                 secondsLate = totalSecondsLateValue % 60;
               }
-            } else if (dayOfWeek === 6) {
-              const lateThreshold = 7 * 3600 + 6 * 60;
-              const exactHourUndertime =
-                minutes === 0 && seconds === 0 && (hours === 8 || hours === 9 || hours === 10 || hours === 11);
-              const noonToOne = totalSeconds >= 12 * 3600 && totalSeconds <= 13 * 3600;
+            }
+            // Saturday
+            else if (dayOfWeek === 6) {
+              const officialTime = 7 * 3600; // 7:00 AM
+              const graceThreshold = 7 * 3600 + 5 * 60; // 7:05 AM
 
-              if (exactHourUndertime || noonToOne) {
+              const exactHourUndertime =
+                minutes === 0 &&
+                seconds === 0 &&
+                (hours === 8 || hours === 9 || hours === 10 || hours === 11);
+
+              const afternoonUndertime =
+                totalSeconds >= 12 * 3600 && totalSeconds <= 17 * 3600; // 12:00 PM to 5:00 PM
+
+              if (exactHourUndertime || afternoonUndertime) {
                 isUndertime = true;
-              } else if (totalSeconds >= lateThreshold) {
+              } else if (totalSeconds > graceThreshold) {
                 isLate = true;
-                totalSecondsLateValue = totalSeconds - lateThreshold;
+                totalSecondsLateValue = totalSeconds - officialTime;
                 minutesLate = Math.floor(totalSecondsLateValue / 60);
                 secondsLate = totalSecondsLateValue % 60;
               }
@@ -148,7 +163,12 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
             const id = Math.random().toString(36).slice(2, 11);
 
             if (isUndertime) {
-              allGeneratedUndertime.push({ id, name, date: dateStr, timeIn });
+              allGeneratedUndertime.push({
+                id,
+                name,
+                date: dateStr,
+                timeIn,
+              });
             } else if (isLate) {
               allLateRecords.push({
                 id,
