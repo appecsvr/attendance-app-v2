@@ -150,7 +150,7 @@ export function Undertime() {
                     <input
                       type="text"
                       required
-                      placeholder="e.g. Reyes, Anna"
+                      placeholder="e.g. Dela Cruz, Juan"
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
