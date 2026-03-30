@@ -44,7 +44,7 @@ export interface UndertimeRecord {
   name: string;
   date: string;
   reason: string;
-  minutesEarly: number;
+  undertimeHours: string;
 }
 
 interface AttendanceState {

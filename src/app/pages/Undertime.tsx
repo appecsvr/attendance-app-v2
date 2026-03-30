@@ -10,13 +10,13 @@ export function Undertime() {
     name: "",
     reason: "",
     date: "",
-    minutes: "",
+    undertimeHours: "",
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.name || !formData.reason || !formData.date || !formData.minutes) {
+    if (!formData.name || !formData.reason || !formData.date || !formData.undertimeHours) {
       return;
     }
 
@@ -24,14 +24,14 @@ export function Undertime() {
       name: formData.name,
       reason: formData.reason,
       date: formData.date,
-      minutesEarly: parseInt(formData.minutes),
+      undertimeHours: formData.undertimeHours,
     });
 
     setFormData({
       name: "",
       reason: "",
       date: "",
-      minutes: "",
+      undertimeHours: "",
     });
 
     setActiveTab("manual");
@@ -145,34 +145,36 @@ export function Undertime() {
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">
-                        Date
-                      </label>
-                      <input
-                        type="date"
-                        required
-                        value={formData.date}
-                        onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
-                      />
-                    </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Date
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={formData.date}
+                      onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">
-                        Mins Early
-                      </label>
-                      <input
-                        type="number"
-                        required
-                        min="1"
-                        placeholder="e.g. 30"
-                        value={formData.minutes}
-                        onChange={(e) => setFormData({ ...formData, minutes: e.target.value })}
-                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
-                      />
-                    </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Undertime Hours
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. 1:00 PM to 5:00 PM"
+                      value={formData.undertimeHours}
+                      onChange={(e) =>
+                        setFormData({ ...formData, undertimeHours: e.target.value })
+                      }
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                    <p className="text-xs text-slate-400 mt-1">
+                      Example: 8:00 AM to 12:00 PM or 1:00 PM to 5:00 PM
+                    </p>
                   </div>
 
                   <div>
@@ -182,7 +184,7 @@ export function Undertime() {
                     <textarea
                       required
                       rows={3}
-                      placeholder="Reason for leaving early..."
+                      placeholder="Reason for undertime..."
                       value={formData.reason}
                       onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
@@ -214,19 +216,27 @@ export function Undertime() {
                     key={record.id}
                     className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden"
                   >
-                    <div className="flex items-start justify-between">
+                    <div className="flex items-start justify-between gap-4">
                       <div>
                         <h3 className="text-base font-bold text-slate-900">{record.name}</h3>
-                        <p className="text-sm text-slate-500">{record.date}</p>
+                        <p className="text-sm text-slate-500">
+                          {new Date(record.date).toLocaleDateString("en-US")}
+                        </p>
                       </div>
 
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-indigo-100 text-indigo-800">
-                        {record.minutesEarly} mins early
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-indigo-100 text-indigo-800 text-right">
+                        {record.undertimeHours}
                       </span>
                     </div>
 
                     <div className="mt-3 text-sm text-slate-700 border-t border-slate-100 pt-3">
-                      <span className="font-semibold">Reason:</span> {record.reason}
+                      <p>
+                        <span className="font-semibold">Undertime Hours:</span>{" "}
+                        {record.undertimeHours}
+                      </p>
+                      <p className="mt-2">
+                        <span className="font-semibold">Reason:</span> {record.reason}
+                      </p>
                     </div>
                   </div>
                 ))
