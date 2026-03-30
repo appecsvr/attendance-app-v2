@@ -48,7 +48,7 @@ export function Dashboard() {
           <div>
             <h3 className="text-2xl font-bold text-slate-900">Upload Attendance Data</h3>
             <p className="text-sm text-slate-500 max-w-xl mx-auto mt-2">
-              Import your Daily or Monthly Attendance Excel file (.xlsx) to automatically
+              Import your daily or monthly Attendance Excel file (.xlsx) to automatically
               process late records and undertime based on shift rules.
             </p>
           </div>
