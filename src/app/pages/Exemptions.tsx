@@ -8,28 +8,25 @@ export function Exemptions() {
   const [formData, setFormData] = useState({
     name: "",
     reason: "",
-    minutesLate: "",
     date: "",
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.name || !formData.reason || !formData.minutesLate || !formData.date) {
+    if (!formData.name || !formData.reason || !formData.date) {
       return;
     }
 
     addExemption({
       name: formData.name,
       reason: formData.reason,
-      minutesLate: parseInt(formData.minutesLate),
       date: formData.date,
     });
 
     setFormData({
       name: "",
       reason: "",
-      minutesLate: "",
       date: "",
     });
   };
@@ -68,36 +65,17 @@ export function Exemptions() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Date
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={formData.date}
-                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Minutes Late
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    min="1"
-                    placeholder="e.g. 15"
-                    value={formData.minutesLate}
-                    onChange={(e) =>
-                      setFormData({ ...formData, minutesLate: e.target.value })
-                    }
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Date
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={formData.date}
+                  onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                />
               </div>
 
               <div>
@@ -149,11 +127,13 @@ export function Exemptions() {
                   <div className="flex items-start justify-between">
                     <div>
                       <h3 className="text-base font-bold text-slate-900">{record.name}</h3>
-                      <p className="text-sm text-slate-500">{record.date}</p>
+                      <p className="text-sm text-slate-500">
+                        {new Date(record.date).toLocaleDateString("en-US")}
+                      </p>
                     </div>
 
                     <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-blue-100 text-blue-800">
-                      {record.minutesLate} mins excused
+                      Exempted
                     </span>
                   </div>
 

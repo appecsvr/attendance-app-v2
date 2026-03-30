@@ -28,8 +28,8 @@ export interface Exemption {
   id: string;
   name: string;
   reason: string;
-  minutesLate: number;
   date: string;
+  minutesLate?: number;
 }
 
 export interface AbsentRecord {
@@ -211,10 +211,56 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const addExemption = (ex: Omit<Exemption, "id">) => {
-    setExemptions((prev) => [
-      { ...ex, id: Math.random().toString(36).slice(2, 11) },
-      ...prev,
-    ]);
+    const newExemption: Exemption = {
+      ...ex,
+      id: Math.random().toString(36).slice(2, 11),
+    };
+
+    setExemptions((prev) => [newExemption, ...prev]);
+
+    const exemptionDate = new Date(ex.date).toLocaleDateString("en-US");
+    const normalizedExemptionName = ex.name.trim().toLowerCase();
+
+    setLateRecords((prevLateRecords) => {
+      const removedRecords = prevLateRecords.filter(
+        (record) =>
+          record.name.trim().toLowerCase() === normalizedExemptionName &&
+          record.date === exemptionDate
+      );
+
+      const updatedLateRecords = prevLateRecords.filter(
+        (record) =>
+          !(
+            record.name.trim().toLowerCase() === normalizedExemptionName &&
+            record.date === exemptionDate
+          )
+      );
+
+      setLateSummary((prevSummary) => {
+        const removedCount = removedRecords.length;
+        const removedMinutes = removedRecords.reduce(
+          (sum, record) => sum + record.minutesLate,
+          0
+        );
+
+        const updatedSummary = prevSummary
+          .map((item) => {
+            if (item.name.trim().toLowerCase() === normalizedExemptionName) {
+              return {
+                ...item,
+                totalLates: Math.max(0, item.totalLates - removedCount),
+                totalMinutesLate: Math.max(0, item.totalMinutesLate - removedMinutes),
+              };
+            }
+            return item;
+          })
+          .filter((item) => item.totalLates > 0);
+
+        return updatedSummary;
+      });
+
+      return updatedLateRecords;
+    });
   };
 
   const addAbsence = (ab: Omit<AbsentRecord, "id">) => {
