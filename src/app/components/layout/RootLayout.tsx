@@ -30,7 +30,7 @@ export function RootLayout() {
           <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
             <Clock className="w-4 h-4 text-white" />
           </div>
-          <span className="text-2xl font-bold text-slate-900">Watts HR Hub</span>
+          <span className="text-2xl font-bold text-slate-900">TimeCore</span>
         </div>
 
         <nav className="flex-1 px-3 space-y-1 overflow-y-auto">
