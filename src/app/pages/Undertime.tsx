@@ -10,28 +10,42 @@ export function Undertime() {
     name: "",
     reason: "",
     date: "",
-    undertimeHours: "",
+    fromTime: "",
+    fromPeriod: "AM",
+    toTime: "",
+    toPeriod: "PM",
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.name || !formData.reason || !formData.date || !formData.undertimeHours) {
+    if (
+      !formData.name ||
+      !formData.reason ||
+      !formData.date ||
+      !formData.fromTime ||
+      !formData.toTime
+    ) {
       return;
     }
+
+    const undertimeHours = `${formData.fromTime} ${formData.fromPeriod} to ${formData.toTime} ${formData.toPeriod}`;
 
     addUndertime({
       name: formData.name,
       reason: formData.reason,
       date: formData.date,
-      undertimeHours: formData.undertimeHours,
+      undertimeHours,
     });
 
     setFormData({
       name: "",
       reason: "",
       date: "",
-      undertimeHours: "",
+      fromTime: "",
+      fromPeriod: "AM",
+      toTime: "",
+      toPeriod: "PM",
     });
 
     setActiveTab("manual");
@@ -159,21 +173,64 @@ export function Undertime() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
                       Undertime Hours
                     </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. 1:00 PM to 5:00 PM"
-                      value={formData.undertimeHours}
-                      onChange={(e) =>
-                        setFormData({ ...formData, undertimeHours: e.target.value })
-                      }
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                    <p className="text-xs text-slate-400 mt-1">
-                      Example: 8:00 AM to 12:00 PM or 1:00 PM to 5:00 PM
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <p className="text-xs font-medium text-slate-500 mb-1">From</p>
+                        <div className="flex gap-2">
+                          <input
+                            type="time"
+                            required
+                            value={formData.fromTime}
+                            onChange={(e) =>
+                              setFormData({ ...formData, fromTime: e.target.value })
+                            }
+                            className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                          />
+                          <select
+                            value={formData.fromPeriod}
+                            onChange={(e) =>
+                              setFormData({ ...formData, fromPeriod: e.target.value })
+                            }
+                            className="w-20 px-2 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                          >
+                            <option value="AM">AM</option>
+                            <option value="PM">PM</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div>
+                        <p className="text-xs font-medium text-slate-500 mb-1">To</p>
+                        <div className="flex gap-2">
+                          <input
+                            type="time"
+                            required
+                            value={formData.toTime}
+                            onChange={(e) =>
+                              setFormData({ ...formData, toTime: e.target.value })
+                            }
+                            className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                          />
+                          <select
+                            value={formData.toPeriod}
+                            onChange={(e) =>
+                              setFormData({ ...formData, toPeriod: e.target.value })
+                            }
+                            className="w-20 px-2 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                          >
+                            <option value="AM">AM</option>
+                            <option value="PM">PM</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-slate-400 mt-2">
+                      Example: 08:00 AM to 12:00 PM or 01:00 PM to 05:00 PM
                     </p>
                   </div>
 
