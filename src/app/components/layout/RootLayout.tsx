@@ -7,11 +7,13 @@ import {
   Timer,
   UploadCloud,
   Bell,
+  Users,
 } from "lucide-react";
 import { useAttendance } from "../../context/AttendanceContext";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
+  { name: "Employees", href: "/employees", icon: Users },
   { name: "Late Records", href: "/lates", icon: Clock },
   { name: "Exemptions", href: "/exemptions", icon: ShieldCheck },
   { name: "Absences", href: "/absences", icon: UserX },
@@ -51,7 +53,11 @@ export function RootLayout() {
                     : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                 }`}
               >
-                <Icon className={`w-4 h-4 ${isActive ? "text-indigo-600" : "text-slate-400"}`} />
+                <Icon
+                  className={`w-4 h-4 ${
+                    isActive ? "text-indigo-600" : "text-slate-400"
+                  }`}
+                />
                 {item.name}
               </Link>
             );
@@ -65,7 +71,9 @@ export function RootLayout() {
                 <UploadCloud className="w-4 h-4 text-indigo-600" />
               </div>
               <div className="min-w-0">
-                <p className="text-xs font-semibold text-indigo-900">Current File</p>
+                <p className="text-xs font-semibold text-indigo-900">
+                  Current File
+                </p>
                 <p className="text-xs text-indigo-700 truncate">
                   {fileName || "None selected"}
                 </p>
