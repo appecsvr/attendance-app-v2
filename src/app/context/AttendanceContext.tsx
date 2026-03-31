@@ -116,47 +116,47 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
             let secondsLate = 0;
             let totalSecondsLateValue = 0;
 
-            if (dayOfWeek >= 1 && dayOfWeek <= 5) {
-              const officialTime = 8 * 3600;
-              const graceThreshold = 8 * 3600 + 5 * 60;
+           if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+  const officialTime = 8 * 3600; // 8:00:00 AM
+  const lateStart = 8 * 3600 + 6 * 60; // 8:06:00 AM
 
-              const exactHourUndertime =
-                minutes === 0 &&
-                seconds === 0 &&
-                (hours === 9 || hours === 10 || hours === 11);
+  const exactHourUndertime =
+    minutes === 0 &&
+    seconds === 0 &&
+    (hours === 9 || hours === 10 || hours === 11);
 
-              const afternoonUndertime =
-                totalSeconds >= 12 * 3600 && totalSeconds <= 17 * 3600;
+  const afternoonUndertime =
+    totalSeconds >= 12 * 3600 && totalSeconds <= 17 * 3600;
 
-              if (exactHourUndertime || afternoonUndertime) {
-                isUndertime = true;
-              } else if (totalSeconds > graceThreshold) {
-                isLate = true;
-                totalSecondsLateValue = totalSeconds - officialTime;
-                minutesLate = Math.floor(totalSecondsLateValue / 60);
-                secondsLate = totalSecondsLateValue % 60;
-              }
-            } else if (dayOfWeek === 6) {
-              const officialTime = 7 * 3600;
-              const graceThreshold = 7 * 3600 + 5 * 60;
+  if (exactHourUndertime || afternoonUndertime) {
+    isUndertime = true;
+  } else if (totalSeconds >= lateStart) {
+    isLate = true;
+    totalSecondsLateValue = totalSeconds - officialTime;
+    minutesLate = Math.floor(totalSecondsLateValue / 60);
+    secondsLate = totalSecondsLateValue % 60;
+  }
+} else if (dayOfWeek === 6) {
+  const officialTime = 7 * 3600; // 7:00:00 AM
+  const lateStart = 7 * 3600 + 6 * 60; // 7:06:00 AM
 
-              const exactHourUndertime =
-                minutes === 0 &&
-                seconds === 0 &&
-                (hours === 8 || hours === 9 || hours === 10 || hours === 11);
+  const exactHourUndertime =
+    minutes === 0 &&
+    seconds === 0 &&
+    (hours === 8 || hours === 9 || hours === 10 || hours === 11);
 
-              const afternoonUndertime =
-                totalSeconds >= 12 * 3600 && totalSeconds <= 17 * 3600;
+  const afternoonUndertime =
+    totalSeconds >= 12 * 3600 && totalSeconds <= 17 * 3600;
 
-              if (exactHourUndertime || afternoonUndertime) {
-                isUndertime = true;
-              } else if (totalSeconds > graceThreshold) {
-                isLate = true;
-                totalSecondsLateValue = totalSeconds - officialTime;
-                minutesLate = Math.floor(totalSecondsLateValue / 60);
-                secondsLate = totalSecondsLateValue % 60;
-              }
-            }
+  if (exactHourUndertime || afternoonUndertime) {
+    isUndertime = true;
+  } else if (totalSeconds >= lateStart) {
+    isLate = true;
+    totalSecondsLateValue = totalSeconds - officialTime;
+    minutesLate = Math.floor(totalSecondsLateValue / 60);
+    secondsLate = totalSecondsLateValue % 60;
+  }
+}
 
             const timeIn = dateTime.toLocaleTimeString("en-US");
             const dateStr = dateTime.toLocaleDateString("en-US");
