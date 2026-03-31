@@ -89,7 +89,7 @@ export function Dashboard() {
             bg: "bg-indigo-100",
           },
           {
-            label: "Gen. Undertimes",
+            label: "Undertime Cases",
             value: generatedUndertimes.length,
             icon: Timer,
             color: "text-purple-600",
