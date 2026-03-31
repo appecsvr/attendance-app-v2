@@ -7,6 +7,8 @@ import {
   Timer,
   ShieldAlert,
   BarChart3,
+  Bell,
+  AlertTriangle,
 } from "lucide-react";
 import {
   LineChart,
@@ -26,6 +28,8 @@ export function Dashboard() {
     lateSummary,
     generatedUndertimes,
     absences,
+    memoAlerts,
+    unreadMemoCount,
   } = useAttendance();
 
   const topLates = [...lateSummary].slice(0, 5);
@@ -35,7 +39,7 @@ export function Dashboard() {
       <div>
         <h1 className="text-4xl font-bold text-slate-900">Dashboard</h1>
         <p className="text-sm text-slate-500 mt-1">
-          Overview of employee attendance and imports
+          Overview of employee attendance, stored records, and memo alerts
         </p>
       </div>
 
@@ -48,8 +52,7 @@ export function Dashboard() {
           <div>
             <h3 className="text-2xl font-bold text-slate-900">Upload Attendance Data</h3>
             <p className="text-sm text-slate-500 max-w-xl mx-auto mt-2">
-              Import your daily or monthly Attendance Excel file (.xlsx) to automatically
-              process late records and undertime based on shift rules.
+              Import daily biometric Excel files. Records will continue counting and stay saved in the browser even after refresh.
             </p>
           </div>
 
@@ -71,6 +74,62 @@ export function Dashboard() {
           )}
         </div>
       </div>
+
+      {memoAlerts.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-3xl p-6 shadow-sm">
+          <div className="flex items-start justify-between gap-4 flex-col lg:flex-row">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center">
+                <Bell className="w-6 h-6" />
+              </div>
+
+              <div>
+                <h3 className="text-lg font-bold text-amber-900">
+                  Memo / Penalty Reminder
+                </h3>
+                <p className="text-sm text-amber-800 mt-1">
+                  Employees who reached 4 lates and above are now visible in the notification bell.
+                </p>
+              </div>
+            </div>
+
+            <div className="px-4 py-2 rounded-2xl bg-white border border-amber-200 text-sm font-semibold text-amber-800">
+              {unreadMemoCount} unread alert(s)
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-5">
+            {memoAlerts.map((alert) => (
+              <div
+                key={alert.id}
+                className="bg-white rounded-2xl border border-amber-200 p-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center">
+                      <AlertTriangle className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-slate-900 truncate">
+                        {alert.name}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {alert.totalMinutesLate} total late minutes
+                      </p>
+                    </div>
+                  </div>
+
+                  <span className="px-3 py-1 rounded-xl text-xs font-bold bg-red-100 text-red-700 whitespace-nowrap">
+                    {alert.totalLates} lates
+                  </span>
+                </div>
+
+                <p className="text-sm text-slate-600 mt-3">{alert.message}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {[
@@ -133,7 +192,10 @@ export function Dashboard() {
           {topLates.length > 0 ? (
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={topLates} margin={{ top: 10, right: 20, left: -20, bottom: 0 }}>
+                <LineChart
+                  data={topLates}
+                  margin={{ top: 10, right: 20, left: -20, bottom: 0 }}
+                >
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
                   <XAxis
                     dataKey="name"
@@ -157,9 +219,9 @@ export function Dashboard() {
                   <Line
                     type="monotone"
                     dataKey="totalLates"
-                    stroke="#4F46E5"
+                    stroke="#2563EB"
                     strokeWidth={3}
-                    dot={{ r: 3, fill: "#4F46E5" }}
+                    dot={{ r: 3, fill: "#2563EB" }}
                     activeDot={{ r: 5 }}
                   />
                 </LineChart>
