@@ -298,8 +298,6 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setFileName(file.name);
-
     const reader = new FileReader();
 
     reader.onload = (event) => {
@@ -446,6 +444,7 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
         };
 
         setUploadedFiles((prev) => [newUploadedFile, ...prev]);
+        setFileName(file.name);
 
         if (e.target) {
           e.target.value = "";
@@ -522,7 +521,12 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const deleteUploadedFile = (fileId: string) => {
-    setUploadedFiles((prev) => prev.filter((file) => file.id !== fileId));
+    setUploadedFiles((prev) => {
+      const updatedFiles = prev.filter((file) => file.id !== fileId);
+
+      setFileName(updatedFiles.length > 0 ? updatedFiles[0].fileName : "");
+      return updatedFiles;
+    });
   };
 
   const clearAllAttendanceHistory = () => {
