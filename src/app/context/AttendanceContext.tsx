@@ -104,6 +104,9 @@ interface AttendanceState {
   addUndertime: (ut: Omit<UndertimeRecord, "id">) => void;
   deleteUploadedFile: (fileId: string) => void;
   clearAllAttendanceHistory: () => void;
+  deleteAbsencesByMonth: (monthKey: string) => void;
+  deleteExemptionsByMonth: (monthKey: string) => void;
+  deleteManualUndertimesByMonth: (monthKey: string) => void;
   markAllMemoAlertsAsRead: () => void;
 }
 
@@ -125,6 +128,13 @@ function normalizeDate(dateValue: string) {
 
 function makeRecordKey(name: string, date: string, timeIn: string) {
   return `${normalizeName(name)}|${date}|${timeIn}`;
+}
+
+function getMonthKey(dateValue: string) {
+  const date = new Date(dateValue);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  return `${year}-${month}`;
 }
 
 function getStoredData(): PersistedAttendanceData {
@@ -523,7 +533,6 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
   const deleteUploadedFile = (fileId: string) => {
     setUploadedFiles((prev) => {
       const updatedFiles = prev.filter((file) => file.id !== fileId);
-
       setFileName(updatedFiles.length > 0 ? updatedFiles[0].fileName : "");
       return updatedFiles;
     });
@@ -533,6 +542,24 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
     setFileName("");
     setUploadedFiles([]);
     setReadMemoEmployeeNames([]);
+  };
+
+  const deleteAbsencesByMonth = (monthKey: string) => {
+    setAbsences((prev) =>
+      prev.filter((record) => getMonthKey(record.date) !== monthKey)
+    );
+  };
+
+  const deleteExemptionsByMonth = (monthKey: string) => {
+    setExemptions((prev) =>
+      prev.filter((record) => getMonthKey(record.date) !== monthKey)
+    );
+  };
+
+  const deleteManualUndertimesByMonth = (monthKey: string) => {
+    setManualUndertimes((prev) =>
+      prev.filter((record) => getMonthKey(record.date) !== monthKey)
+    );
   };
 
   const markAllMemoAlertsAsRead = () => {
@@ -559,6 +586,9 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
         addUndertime,
         deleteUploadedFile,
         clearAllAttendanceHistory,
+        deleteAbsencesByMonth,
+        deleteExemptionsByMonth,
+        deleteManualUndertimesByMonth,
         markAllMemoAlertsAsRead,
       }}
     >
