@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useAttendance } from "../context/AttendanceContext";
 import {
   Upload,
@@ -12,9 +12,6 @@ import {
   AlertTriangle,
   Trash2,
   FolderOpen,
-  DatabaseBackup,
-  Download,
-  Upload as UploadIcon,
   CalendarRange,
   CheckCircle2,
   AlertCircle,
@@ -29,15 +26,30 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-function formatMonthLabel(monthKey: string) {
-  if (monthKey === "all") return "All Months";
+function formatScopeLabel(scope: string) {
+  if (scope === "all") return "All Records";
 
-  const [year, month] = monthKey.split("-");
-  const date = new Date(Number(year), Number(month) - 1, 1);
-  return date.toLocaleDateString("en-US", {
-    month: "long",
-    year: "numeric",
-  });
+  if (scope.startsWith("month:")) {
+    const monthKey = scope.replace("month:", "");
+    const [year, month] = monthKey.split("-");
+    const date = new Date(Number(year), Number(month) - 1, 1);
+
+    return date.toLocaleDateString("en-US", {
+      month: "long",
+      year: "numeric",
+    });
+  }
+
+  if (scope.startsWith("day:")) {
+    const dayValue = scope.replace("day:", "");
+    return new Date(dayValue).toLocaleDateString("en-US", {
+      month: "long",
+      day: "2-digit",
+      year: "numeric",
+    });
+  }
+
+  return "All Records";
 }
 
 export function Dashboard() {
@@ -55,9 +67,7 @@ export function Dashboard() {
     unreadMemoCount,
     deleteUploadedFile,
     clearAllAttendanceHistory,
-    selectedMonth,
-    exportBackup,
-    importBackupFile,
+    selectedScope,
     exportFilteredWorkbook,
   } = useAttendance();
 
@@ -66,17 +76,8 @@ export function Dashboard() {
     message: string;
   } | null>(null);
 
-  const backupInputRef = useRef<HTMLInputElement | null>(null);
   const topLates = [...lateSummary].slice(0, 5);
-  const filterLabel = formatMonthLabel(selectedMonth);
-
-  const handleBackupImport = async (file: File) => {
-    const result = await importBackupFile(file);
-    setFeedback({
-      type: result.success ? "success" : "error",
-      message: result.message,
-    });
-  };
+  const filterLabel = formatScopeLabel(selectedScope);
 
   const handleExcelExport = () => {
     const result = exportFilteredWorkbook();
@@ -164,61 +165,29 @@ export function Dashboard() {
         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-4">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-2xl bg-slate-100 text-slate-700 flex items-center justify-center">
-              <DatabaseBackup className="w-5 h-5" />
+              <FileSpreadsheet className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-slate-900">Backup & Reports</h3>
+              <h3 className="text-lg font-bold text-slate-900">Reports</h3>
               <p className="text-sm text-slate-500">
-                Protect records and export the current report scope.
+                Export the current report scope to Excel.
               </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-3">
-            <button
-              onClick={exportBackup}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800"
-            >
-              <Download className="w-4 h-4" />
-              Download JSON Backup
-            </button>
-
-            <button
-              onClick={() => backupInputRef.current?.click()}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              <UploadIcon className="w-4 h-4" />
-              Restore JSON Backup
-            </button>
-
-            <button
-              onClick={handleExcelExport}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 hover:bg-emerald-100"
-            >
-              <FileSpreadsheet className="w-4 h-4" />
-              Export Excel Report
-            </button>
-          </div>
-
-          <input
-            ref={backupInputRef}
-            type="file"
-            accept="application/json,.json"
-            className="hidden"
-            onChange={async (e) => {
-              const file = e.target.files?.[0];
-              if (file) {
-                await handleBackupImport(file);
-              }
-              e.target.value = "";
-            }}
-          />
+          <button
+            onClick={handleExcelExport}
+            className="w-full inline-flex items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 hover:bg-emerald-100"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            Export Excel Report
+          </button>
 
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
             <p className="font-semibold text-slate-900">Current export scope</p>
             <p className="mt-1">
-              The backup saves everything. The Excel export follows your global month filter:{" "}
-              <span className="font-semibold">{filterLabel}</span>.
+              The Excel export follows your selected report scope:
+              <span className="font-semibold"> {filterLabel}</span>
             </p>
           </div>
         </div>

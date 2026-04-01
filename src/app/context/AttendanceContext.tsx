@@ -75,6 +75,12 @@ export interface UploadedAttendanceFile {
   generatedUndertimes: GeneratedUndertime[];
 }
 
+export interface ScopeOption {
+  value: string;
+  label: string;
+  type: "all" | "month" | "day";
+}
+
 interface PersistedAttendanceData {
   fileName: string;
   uploadedFiles: UploadedAttendanceFile[];
@@ -82,7 +88,7 @@ interface PersistedAttendanceData {
   absences: AbsentRecord[];
   manualUndertimes: UndertimeRecord[];
   readMemoEmployeeNames: string[];
-  selectedMonth: string;
+  selectedScope: string;
 }
 
 interface AttendanceState {
@@ -96,36 +102,31 @@ interface AttendanceState {
   manualUndertimes: UndertimeRecord[];
   memoAlerts: MemoAlert[];
   unreadMemoCount: number;
-  monthOptions: string[];
-  selectedMonth: string;
-  setSelectedMonth: (month: string) => void;
+  scopeOptions: ScopeOption[];
+  selectedScope: string;
+  setSelectedScope: (scope: string) => void;
   handleFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   addExemption: (ex: Omit<Exemption, "id">) => {
     success: boolean;
     message: string;
   };
   addAbsence: (ab: Omit<AbsentRecord, "id">) => void;
-  addUndertime: (ut: Omit<UndertimeRecord, "id">) => void;
+  addUndertime: (ut: Omit<UndertimeRecord, "id">) => {
+    success: boolean;
+    message: string;
+  };
   deleteUploadedFile: (fileId: string) => void;
   clearAllAttendanceHistory: () => void;
   deleteAbsencesByMonth: (monthKey: string) => void;
   deleteExemptionsByMonth: (monthKey: string) => void;
   deleteManualUndertimesByMonth: (monthKey: string) => void;
   markAllMemoAlertsAsRead: () => void;
-  exportBackup: () => void;
-  importBackupFile: (file: File) => Promise<{ success: boolean; message: string }>;
   exportFilteredWorkbook: () => { success: boolean; message: string };
 }
 
 const AttendanceContext = createContext<AttendanceState | undefined>(undefined);
 
-const STORAGE_KEY = "attendance-system-v4";
-const BACKUP_VERSION = "1.0.0";
-
-type BackupPayload = PersistedAttendanceData & {
-  backupVersion: string;
-  exportedAt: string;
-};
+const STORAGE_KEY = "attendance-system-v5";
 
 function createId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -150,6 +151,38 @@ function getMonthKey(dateValue: string) {
   return `${year}-${month}`;
 }
 
+function getDayKey(dateValue: string) {
+  return normalizeDate(dateValue);
+}
+
+function formatMonthLabel(monthKey: string) {
+  const [year, month] = monthKey.split("-");
+  const date = new Date(Number(year), Number(month) - 1, 1);
+
+  return date.toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function formatScopeLabel(scope: string) {
+  if (scope === "all") return "All Records";
+
+  if (scope.startsWith("month:")) {
+    return formatMonthLabel(scope.replace("month:", ""));
+  }
+
+  if (scope.startsWith("day:")) {
+    return new Date(scope.replace("day:", "")).toLocaleDateString("en-US", {
+      month: "long",
+      day: "2-digit",
+      year: "numeric",
+    });
+  }
+
+  return "All Records";
+}
+
 function getDefaultStoredData(): PersistedAttendanceData {
   return {
     fileName: "",
@@ -158,7 +191,7 @@ function getDefaultStoredData(): PersistedAttendanceData {
     absences: [],
     manualUndertimes: [],
     readMemoEmployeeNames: [],
-    selectedMonth: "all",
+    selectedScope: "all",
   };
 }
 
@@ -183,31 +216,25 @@ function getStoredData(): PersistedAttendanceData {
       absences: parsed.absences ?? [],
       manualUndertimes: parsed.manualUndertimes ?? [],
       readMemoEmployeeNames: parsed.readMemoEmployeeNames ?? [],
-      selectedMonth: parsed.selectedMonth ?? "all",
+      selectedScope: parsed.selectedScope ?? "all",
     };
   } catch {
     return getDefaultStoredData();
   }
 }
 
-function makeDownload(blob: Blob, fileName: string) {
-  const url = window.URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = fileName;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  window.URL.revokeObjectURL(url);
-}
+function matchesScope(dateValue: string, selectedScope: string) {
+  if (selectedScope === "all") return true;
 
-function readFileAsText(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result ?? ""));
-    reader.onerror = () => reject(new Error("Unable to read file."));
-    reader.readAsText(file);
-  });
+  if (selectedScope.startsWith("month:")) {
+    return getMonthKey(dateValue) === selectedScope.replace("month:", "");
+  }
+
+  if (selectedScope.startsWith("day:")) {
+    return normalizeDate(dateValue) === selectedScope.replace("day:", "");
+  }
+
+  return true;
 }
 
 export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
@@ -225,8 +252,8 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
   const [readMemoEmployeeNames, setReadMemoEmployeeNames] = useState<string[]>(
     initialData.readMemoEmployeeNames
   );
-  const [selectedMonth, setSelectedMonth] = useState<string>(
-    initialData.selectedMonth || "all"
+  const [selectedScope, setSelectedScope] = useState<string>(
+    initialData.selectedScope || "all"
   );
 
   useEffect(() => {
@@ -237,7 +264,7 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
       absences: absencesState,
       manualUndertimes: manualUndertimesState,
       readMemoEmployeeNames,
-      selectedMonth,
+      selectedScope,
     };
 
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
@@ -248,39 +275,14 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
     absencesState,
     manualUndertimesState,
     readMemoEmployeeNames,
-    selectedMonth,
+    selectedScope,
   ]);
 
-  const rawLateRecords = useMemo(() => {
-    const allRawLateRecords = uploadedFiles.flatMap((file) => file.lateRecords);
+  const allLateRecords = useMemo(() => {
+    return uploadedFiles.flatMap((file) => file.lateRecords);
+  }, [uploadedFiles]);
 
-    if (allRawLateRecords.length === 0) return [];
-
-    const exemptionCountMap = new Map<string, number>();
-
-    exemptionsState.forEach((ex) => {
-      const exemptionDate = normalizeDate(ex.date);
-      const key = `${normalizeName(ex.name)}|${exemptionDate}`;
-      exemptionCountMap.set(key, (exemptionCountMap.get(key) ?? 0) + 1);
-    });
-
-    const consumedExemptions = new Map<string, number>();
-
-    return allRawLateRecords.filter((record) => {
-      const key = `${normalizeName(record.name)}|${record.date}`;
-      const allowedExemptions = exemptionCountMap.get(key) ?? 0;
-      const alreadyConsumed = consumedExemptions.get(key) ?? 0;
-
-      if (alreadyConsumed < allowedExemptions) {
-        consumedExemptions.set(key, alreadyConsumed + 1);
-        return false;
-      }
-
-      return true;
-    });
-  }, [uploadedFiles, exemptionsState]);
-
-  const rawGeneratedUndertimes = useMemo(() => {
+  const allGeneratedUndertimes = useMemo(() => {
     return uploadedFiles
       .flatMap((file) => file.generatedUndertimes)
       .sort((a, b) => {
@@ -290,34 +292,95 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
       });
   }, [uploadedFiles]);
 
-  const monthOptions = useMemo(() => {
-    const allMonths = new Set<string>();
+  const adjustedLateRecords = useMemo(() => {
+    if (allLateRecords.length === 0) return [];
 
-    rawLateRecords.forEach((record) => allMonths.add(getMonthKey(record.date)));
-    rawGeneratedUndertimes.forEach((record) => allMonths.add(getMonthKey(record.date)));
-    exemptionsState.forEach((record) => allMonths.add(getMonthKey(record.date)));
-    absencesState.forEach((record) => allMonths.add(getMonthKey(record.date)));
-    manualUndertimesState.forEach((record) => allMonths.add(getMonthKey(record.date)));
+    const adjustmentCountMap = new Map<string, number>();
 
-    return Array.from(allMonths).sort((a, b) => b.localeCompare(a));
+    exemptionsState.forEach((ex) => {
+      const key = `${normalizeName(ex.name)}|${normalizeDate(ex.date)}`;
+      adjustmentCountMap.set(key, (adjustmentCountMap.get(key) ?? 0) + 1);
+    });
+
+    manualUndertimesState.forEach((ut) => {
+      const key = `${normalizeName(ut.name)}|${normalizeDate(ut.date)}`;
+      adjustmentCountMap.set(key, (adjustmentCountMap.get(key) ?? 0) + 1);
+    });
+
+    const consumedAdjustments = new Map<string, number>();
+
+    return allLateRecords.filter((record) => {
+      const key = `${normalizeName(record.name)}|${record.date}`;
+      const allowed = adjustmentCountMap.get(key) ?? 0;
+      const used = consumedAdjustments.get(key) ?? 0;
+
+      if (used < allowed) {
+        consumedAdjustments.set(key, used + 1);
+        return false;
+      }
+
+      return true;
+    });
+  }, [allLateRecords, exemptionsState, manualUndertimesState]);
+
+  const scopeOptions = useMemo<ScopeOption[]>(() => {
+    const monthSet = new Set<string>();
+    const daySet = new Set<string>();
+
+    [
+      ...allLateRecords,
+      ...allGeneratedUndertimes,
+      ...exemptionsState,
+      ...absencesState,
+      ...manualUndertimesState,
+    ].forEach((item) => {
+      monthSet.add(getMonthKey(item.date));
+      daySet.add(getDayKey(item.date));
+    });
+
+    const monthOptions: ScopeOption[] = Array.from(monthSet)
+      .sort((a, b) => b.localeCompare(a))
+      .map((month) => ({
+        value: `month:${month}`,
+        label: formatMonthLabel(month),
+        type: "month",
+      }));
+
+    const dayOptions: ScopeOption[] = Array.from(daySet)
+      .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
+      .map((day) => ({
+        value: `day:${day}`,
+        label: new Date(day).toLocaleDateString("en-US", {
+          month: "long",
+          day: "2-digit",
+          year: "numeric",
+        }),
+        type: "day",
+      }));
+
+    return [
+      { value: "all", label: "All Records", type: "all" },
+      ...monthOptions,
+      ...dayOptions,
+    ];
   }, [
-    rawLateRecords,
-    rawGeneratedUndertimes,
+    allLateRecords,
+    allGeneratedUndertimes,
     exemptionsState,
     absencesState,
     manualUndertimesState,
   ]);
 
   useEffect(() => {
-    if (selectedMonth !== "all" && !monthOptions.includes(selectedMonth)) {
-      setSelectedMonth("all");
+    const exists = scopeOptions.some((option) => option.value === selectedScope);
+    if (!exists) {
+      setSelectedScope("all");
     }
-  }, [monthOptions, selectedMonth]);
+  }, [scopeOptions, selectedScope]);
 
   const lateRecords = useMemo(() => {
-    if (selectedMonth === "all") return rawLateRecords;
-    return rawLateRecords.filter((record) => getMonthKey(record.date) === selectedMonth);
-  }, [rawLateRecords, selectedMonth]);
+    return adjustedLateRecords.filter((record) => matchesScope(record.date, selectedScope));
+  }, [adjustedLateRecords, selectedScope]);
 
   const lateSummary = useMemo<LateSummary[]>(() => {
     const lateCount: Record<string, { lates: number; minutes: number }> = {};
@@ -346,28 +409,24 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
   }, [lateRecords]);
 
   const generatedUndertimes = useMemo(() => {
-    if (selectedMonth === "all") return rawGeneratedUndertimes;
-    return rawGeneratedUndertimes.filter(
-      (record) => getMonthKey(record.date) === selectedMonth
+    return allGeneratedUndertimes.filter((record) =>
+      matchesScope(record.date, selectedScope)
     );
-  }, [rawGeneratedUndertimes, selectedMonth]);
+  }, [allGeneratedUndertimes, selectedScope]);
 
   const exemptions = useMemo(() => {
-    if (selectedMonth === "all") return exemptionsState;
-    return exemptionsState.filter((record) => getMonthKey(record.date) === selectedMonth);
-  }, [exemptionsState, selectedMonth]);
+    return exemptionsState.filter((record) => matchesScope(record.date, selectedScope));
+  }, [exemptionsState, selectedScope]);
 
   const absences = useMemo(() => {
-    if (selectedMonth === "all") return absencesState;
-    return absencesState.filter((record) => getMonthKey(record.date) === selectedMonth);
-  }, [absencesState, selectedMonth]);
+    return absencesState.filter((record) => matchesScope(record.date, selectedScope));
+  }, [absencesState, selectedScope]);
 
   const manualUndertimes = useMemo(() => {
-    if (selectedMonth === "all") return manualUndertimesState;
-    return manualUndertimesState.filter(
-      (record) => getMonthKey(record.date) === selectedMonth
+    return manualUndertimesState.filter((record) =>
+      matchesScope(record.date, selectedScope)
     );
-  }, [manualUndertimesState, selectedMonth]);
+  }, [manualUndertimesState, selectedScope]);
 
   const memoAlerts = useMemo<MemoAlert[]>(() => {
     const readSet = new Set(readMemoEmployeeNames.map((name) => normalizeName(name)));
@@ -539,9 +598,11 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
         setUploadedFiles((prev) => [newUploadedFile, ...prev]);
         setFileName(file.name);
 
-        const uploadedMonth = parsedLateRecords[0]?.date || parsedGeneratedUndertime[0]?.date;
-        if (uploadedMonth) {
-          setSelectedMonth(getMonthKey(uploadedMonth));
+        const uploadedDay =
+          parsedLateRecords[0]?.date || parsedGeneratedUndertime[0]?.date || null;
+
+        if (uploadedDay) {
+          setSelectedScope(`day:${uploadedDay}`);
         }
 
         if (e.target) {
@@ -560,7 +621,7 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
     const exemptionDate = normalizeDate(ex.date);
     const normalizedExemptionName = normalizeName(ex.name);
 
-    const matchingLateRecords = rawLateRecords.filter(
+    const matchingLateRecords = allLateRecords.filter(
       (record) =>
         normalizeName(record.name) === normalizedExemptionName &&
         record.date === exemptionDate
@@ -569,7 +630,7 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
     if (matchingLateRecords.length === 0) {
       return {
         success: false,
-        message: "No matching active late record found for this employee and date.",
+        message: "No matching late record found for this employee and date.",
       };
     }
 
@@ -593,11 +654,11 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
     };
 
     setExemptions((prev) => [newExemption, ...prev]);
-    setSelectedMonth(getMonthKey(ex.date));
+    setSelectedScope(`day:${normalizeDate(ex.date)}`);
 
     return {
       success: true,
-      message: "Exemption saved successfully.",
+      message: "Exemption saved successfully and matching late record is now excluded.",
     };
   };
 
@@ -608,17 +669,40 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
     };
 
     setAbsences((prev) => [newAbsence, ...prev]);
-    setSelectedMonth(getMonthKey(ab.date));
+    setSelectedScope(`day:${normalizeDate(ab.date)}`);
   };
 
   const addUndertime = (ut: Omit<UndertimeRecord, "id">) => {
+    const undertimeDate = normalizeDate(ut.date);
+    const normalizedName = normalizeName(ut.name);
+
+    const matchingLateRecords = allLateRecords.filter(
+      (record) =>
+        normalizeName(record.name) === normalizedName &&
+        record.date === undertimeDate
+    );
+
+    if (matchingLateRecords.length === 0) {
+      return {
+        success: false,
+        message:
+          "No matching late record found for this employee and date. Manual undertime will only offset a late record if name and date match.",
+      };
+    }
+
     const newUndertime: UndertimeRecord = {
       ...ut,
       id: createId(),
     };
 
     setManualUndertimes((prev) => [newUndertime, ...prev]);
-    setSelectedMonth(getMonthKey(ut.date));
+    setSelectedScope(`day:${undertimeDate}`);
+
+    return {
+      success: true,
+      message:
+        "Manual undertime saved successfully and matching late record is now excluded.",
+    };
   };
 
   const deleteUploadedFile = (fileId: string) => {
@@ -633,7 +717,7 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
     setFileName("");
     setUploadedFiles([]);
     setReadMemoEmployeeNames([]);
-    setSelectedMonth("all");
+    setSelectedScope("all");
   };
 
   const deleteAbsencesByMonth = (monthKey: string) => {
@@ -657,60 +741,6 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
   const markAllMemoAlertsAsRead = () => {
     const uniqueNames = Array.from(new Set(memoAlerts.map((item) => item.name.trim())));
     setReadMemoEmployeeNames((prev) => Array.from(new Set([...prev, ...uniqueNames])));
-  };
-
-  const exportBackup = () => {
-    const payload: BackupPayload = {
-      backupVersion: BACKUP_VERSION,
-      exportedAt: new Date().toISOString(),
-      fileName,
-      uploadedFiles,
-      exemptions: exemptionsState,
-      absences: absencesState,
-      manualUndertimes: manualUndertimesState,
-      readMemoEmployeeNames,
-      selectedMonth,
-    };
-
-    const blob = new Blob([JSON.stringify(payload, null, 2)], {
-      type: "application/json",
-    });
-
-    const stamp = new Date().toISOString().slice(0, 10);
-    makeDownload(blob, `attendance-backup-${stamp}.json`);
-  };
-
-  const importBackupFile = async (file: File) => {
-    try {
-      const text = await readFileAsText(file);
-      const parsed = JSON.parse(text) as Partial<BackupPayload>;
-
-      if (!Array.isArray(parsed.uploadedFiles)) {
-        return {
-          success: false,
-          message: "Invalid backup file. Uploaded files are missing.",
-        };
-      }
-
-      setFileName(parsed.fileName ?? "");
-      setUploadedFiles(parsed.uploadedFiles ?? []);
-      setExemptions(parsed.exemptions ?? []);
-      setAbsences(parsed.absences ?? []);
-      setManualUndertimes(parsed.manualUndertimes ?? []);
-      setReadMemoEmployeeNames(parsed.readMemoEmployeeNames ?? []);
-      setSelectedMonth(parsed.selectedMonth ?? "all");
-
-      return {
-        success: true,
-        message: `Backup imported successfully from ${file.name}.`,
-      };
-    } catch (error) {
-      console.error("Backup import failed:", error);
-      return {
-        success: false,
-        message: "Backup import failed. Please use a valid JSON backup file.",
-      };
-    }
   };
 
   const exportFilteredWorkbook = () => {
@@ -793,7 +823,11 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
         "Manual Undertime"
       );
 
-      const suffix = selectedMonth === "all" ? "all-months" : selectedMonth;
+      const suffix =
+        selectedScope === "all"
+          ? "all-records"
+          : formatScopeLabel(selectedScope).replace(/[^\w\s-]/g, "").replace(/\s+/g, "-");
+
       XLSX.writeFile(workbook, `attendance-report-${suffix}.xlsx`);
 
       return {
@@ -822,9 +856,9 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
         manualUndertimes,
         memoAlerts,
         unreadMemoCount,
-        monthOptions,
-        selectedMonth,
-        setSelectedMonth,
+        scopeOptions,
+        selectedScope,
+        setSelectedScope,
         handleFileUpload,
         addExemption,
         addAbsence,
@@ -835,8 +869,6 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
         deleteExemptionsByMonth,
         deleteManualUndertimesByMonth,
         markAllMemoAlertsAsRead,
-        exportBackup,
-        importBackupFile,
         exportFilteredWorkbook,
       }}
     >

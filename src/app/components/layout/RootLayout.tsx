@@ -24,16 +24,30 @@ const navigation = [
   { name: "Undertime", href: "/undertime", icon: Timer },
 ];
 
-function formatMonthLabel(monthKey: string) {
-  if (monthKey === "all") return "All Months";
+function formatScopeLabel(scope: string) {
+  if (scope === "all") return "All Records";
 
-  const [year, month] = monthKey.split("-");
-  const date = new Date(Number(year), Number(month) - 1, 1);
+  if (scope.startsWith("month:")) {
+    const monthKey = scope.replace("month:", "");
+    const [year, month] = monthKey.split("-");
+    const date = new Date(Number(year), Number(month) - 1, 1);
 
-  return date.toLocaleDateString("en-US", {
-    month: "long",
-    year: "numeric",
-  });
+    return date.toLocaleDateString("en-US", {
+      month: "long",
+      year: "numeric",
+    });
+  }
+
+  if (scope.startsWith("day:")) {
+    const dayValue = scope.replace("day:", "");
+    return new Date(dayValue).toLocaleDateString("en-US", {
+      month: "long",
+      day: "2-digit",
+      year: "numeric",
+    });
+  }
+
+  return "All Records";
 }
 
 export function RootLayout() {
@@ -43,16 +57,16 @@ export function RootLayout() {
     memoAlerts,
     unreadMemoCount,
     markAllMemoAlertsAsRead,
-    monthOptions,
-    selectedMonth,
-    setSelectedMonth,
+    scopeOptions,
+    selectedScope,
+    setSelectedScope,
   } = useAttendance();
 
   const [isBellOpen, setIsBellOpen] = useState(false);
 
-  const currentMonthLabel = useMemo(
-    () => formatMonthLabel(selectedMonth),
-    [selectedMonth]
+  const currentScopeLabel = useMemo(
+    () => formatScopeLabel(selectedScope),
+    [selectedScope]
   );
 
   return (
@@ -116,8 +130,8 @@ export function RootLayout() {
                 <CalendarRange className="w-4 h-4 text-blue-600" />
               </div>
               <div>
-                <p className="text-xs font-semibold text-blue-900">Global Month Filter</p>
-                <p className="text-xs text-blue-700">{currentMonthLabel}</p>
+                <p className="text-xs font-semibold text-blue-900">Report Scope</p>
+                <p className="text-xs text-blue-700">{currentScopeLabel}</p>
               </div>
             </div>
           </div>
@@ -149,14 +163,17 @@ export function RootLayout() {
             </div>
 
             <select
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+              value={selectedScope}
+              onChange={(e) => setSelectedScope(e.target.value)}
+              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500 min-w-[220px]"
             >
-              <option value="all">All Months</option>
-              {monthOptions.map((month) => (
-                <option key={month} value={month}>
-                  {formatMonthLabel(month)}
+              {scopeOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.type === "month"
+                    ? `Month • ${option.label}`
+                    : option.type === "day"
+                    ? `Day • ${option.label}`
+                    : option.label}
                 </option>
               ))}
             </select>
@@ -206,9 +223,6 @@ export function RootLayout() {
                         <Bell className="w-10 h-10 mx-auto text-slate-200 mb-3" />
                         <p className="text-sm font-medium text-slate-700">
                           No memo alerts yet
-                        </p>
-                        <p className="text-xs text-slate-500 mt-1">
-                          Notifications will appear here once an employee reaches 4 lates.
                         </p>
                       </div>
                     ) : (
