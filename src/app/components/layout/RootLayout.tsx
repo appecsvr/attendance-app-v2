@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, Outlet, useLocation } from "react-router";
 import {
   LayoutDashboard,
@@ -11,6 +11,7 @@ import {
   Users,
   AlertTriangle,
   CheckCheck,
+  CalendarRange,
 } from "lucide-react";
 import { useAttendance } from "../../context/AttendanceContext";
 
@@ -23,6 +24,18 @@ const navigation = [
   { name: "Undertime", href: "/undertime", icon: Timer },
 ];
 
+function formatMonthLabel(monthKey: string) {
+  if (monthKey === "all") return "All Months";
+
+  const [year, month] = monthKey.split("-");
+  const date = new Date(Number(year), Number(month) - 1, 1);
+
+  return date.toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+  });
+}
+
 export function RootLayout() {
   const location = useLocation();
   const {
@@ -30,9 +43,17 @@ export function RootLayout() {
     memoAlerts,
     unreadMemoCount,
     markAllMemoAlertsAsRead,
+    monthOptions,
+    selectedMonth,
+    setSelectedMonth,
   } = useAttendance();
 
   const [isBellOpen, setIsBellOpen] = useState(false);
+
+  const currentMonthLabel = useMemo(
+    () => formatMonthLabel(selectedMonth),
+    [selectedMonth]
+  );
 
   return (
     <div className="min-h-screen bg-slate-100 flex">
@@ -81,12 +102,22 @@ export function RootLayout() {
                 <UploadCloud className="w-4 h-4 text-indigo-600" />
               </div>
               <div className="min-w-0">
-                <p className="text-xs font-semibold text-indigo-900">
-                  Current File
-                </p>
+                <p className="text-xs font-semibold text-indigo-900">Current File</p>
                 <p className="text-xs text-indigo-700 truncate">
                   {fileName || "None selected"}
                 </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-blue-50 rounded-2xl border border-blue-100 p-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-lg bg-blue-100">
+                <CalendarRange className="w-4 h-4 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-blue-900">Global Month Filter</p>
+                <p className="text-xs text-blue-700">{currentMonthLabel}</p>
               </div>
             </div>
           </div>
@@ -97,9 +128,7 @@ export function RootLayout() {
                 <Bell className="w-4 h-4 text-amber-600" />
               </div>
               <div>
-                <p className="text-xs font-semibold text-amber-900">
-                  Memo Reminders
-                </p>
+                <p className="text-xs font-semibold text-amber-900">Memo Reminders</p>
                 <p className="text-xs text-amber-700">
                   {memoAlerts.length > 0
                     ? `${memoAlerts.length} employee(s) due for memo review`
@@ -112,7 +141,27 @@ export function RootLayout() {
       </aside>
 
       <div className="flex-1 md:ml-64 flex flex-col min-w-0">
-        <header className="bg-white border-b border-slate-200 h-16 flex items-center justify-end px-6 lg:px-8 sticky top-0 z-20">
+        <header className="bg-white border-b border-slate-200 min-h-16 flex items-center justify-between px-6 lg:px-8 sticky top-0 z-20 gap-4 flex-wrap py-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="hidden sm:flex items-center gap-2 text-slate-500 text-sm font-medium">
+              <CalendarRange className="w-4 h-4" />
+              Reports Scope
+            </div>
+
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="all">All Months</option>
+              {monthOptions.map((month) => (
+                <option key={month} value={month}>
+                  {formatMonthLabel(month)}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div className="flex items-center gap-4">
             <div className="relative">
               <button

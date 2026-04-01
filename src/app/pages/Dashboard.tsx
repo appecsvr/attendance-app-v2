@@ -1,3 +1,4 @@
+import { useRef, useState } from "react";
 import { useAttendance } from "../context/AttendanceContext";
 import {
   Upload,
@@ -11,6 +12,12 @@ import {
   AlertTriangle,
   Trash2,
   FolderOpen,
+  DatabaseBackup,
+  Download,
+  Upload as UploadIcon,
+  CalendarRange,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
 import {
   LineChart,
@@ -22,6 +29,17 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
+function formatMonthLabel(monthKey: string) {
+  if (monthKey === "all") return "All Months";
+
+  const [year, month] = monthKey.split("-");
+  const date = new Date(Number(year), Number(month) - 1, 1);
+  return date.toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+  });
+}
+
 export function Dashboard() {
   const {
     handleFileUpload,
@@ -31,52 +49,178 @@ export function Dashboard() {
     lateSummary,
     generatedUndertimes,
     absences,
+    exemptions,
+    manualUndertimes,
     memoAlerts,
     unreadMemoCount,
     deleteUploadedFile,
     clearAllAttendanceHistory,
+    selectedMonth,
+    exportBackup,
+    importBackupFile,
+    exportFilteredWorkbook,
   } = useAttendance();
 
+  const [feedback, setFeedback] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
+
+  const backupInputRef = useRef<HTMLInputElement | null>(null);
   const topLates = [...lateSummary].slice(0, 5);
+  const filterLabel = formatMonthLabel(selectedMonth);
+
+  const handleBackupImport = async (file: File) => {
+    const result = await importBackupFile(file);
+    setFeedback({
+      type: result.success ? "success" : "error",
+      message: result.message,
+    });
+  };
+
+  const handleExcelExport = () => {
+    const result = exportFilteredWorkbook();
+    setFeedback({
+      type: result.success ? "success" : "error",
+      message: result.message,
+    });
+  };
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-4xl font-bold text-slate-900">Dashboard</h1>
-        <p className="text-sm text-slate-500 mt-1">
-          Overview of employee attendance, stored records, uploaded files, and memo alerts
-        </p>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h1 className="text-4xl font-bold text-slate-900">Dashboard</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Overview of employee attendance, stored records, uploaded files, and memo alerts
+          </p>
+        </div>
+
+        <div className="inline-flex items-center gap-2 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-800">
+          <CalendarRange className="w-4 h-4" />
+          Current report scope: {filterLabel}
+        </div>
       </div>
 
-      <div className="bg-white rounded-3xl p-10 border border-slate-200 border-dashed shadow-sm text-center">
-        <div className="flex flex-col items-center justify-center space-y-5">
-          <div className="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center">
-            <FileSpreadsheet className="w-8 h-8" />
-          </div>
-
-          <div>
-            <h3 className="text-2xl font-bold text-slate-900">Upload Attendance Data</h3>
-            <p className="text-sm text-slate-500 max-w-xl mx-auto mt-2">
-              Import daily biometric Excel files. Each upload is saved separately and can also be deleted separately.
-            </p>
-          </div>
-
-          <label className="cursor-pointer inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-2xl shadow-sm transition-all">
-            <Upload className="w-4 h-4" />
-            Browse Files
-            <input
-              type="file"
-              accept=".xlsx,.xls"
-              onChange={handleFileUpload}
-              className="hidden"
-            />
-          </label>
-
-          {fileName && (
-            <p className="text-sm font-medium text-emerald-600 bg-emerald-50 px-5 py-2 rounded-full border border-emerald-100">
-              {fileName} loaded successfully
-            </p>
+      {feedback && (
+        <div
+          className={`rounded-2xl border px-4 py-4 flex items-start gap-3 ${
+            feedback.type === "success"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+              : "border-red-200 bg-red-50 text-red-800"
+          }`}
+        >
+          {feedback.type === "success" ? (
+            <CheckCircle2 className="w-5 h-5 mt-0.5 flex-shrink-0" />
+          ) : (
+            <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
           )}
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold">System Message</p>
+            <p className="text-sm mt-1">{feedback.message}</p>
+          </div>
+          <button
+            onClick={() => setFeedback(null)}
+            className="text-xs font-semibold opacity-70 hover:opacity-100"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className="xl:col-span-2 bg-white rounded-3xl p-10 border border-slate-200 border-dashed shadow-sm text-center">
+          <div className="flex flex-col items-center justify-center space-y-5">
+            <div className="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center">
+              <FileSpreadsheet className="w-8 h-8" />
+            </div>
+
+            <div>
+              <h3 className="text-2xl font-bold text-slate-900">Upload Attendance Data</h3>
+              <p className="text-sm text-slate-500 max-w-xl mx-auto mt-2">
+                Import daily biometric Excel files. Each upload is saved separately and can also be deleted separately.
+              </p>
+            </div>
+
+            <label className="cursor-pointer inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-2xl shadow-sm transition-all">
+              <Upload className="w-4 h-4" />
+              Browse Files
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+            </label>
+
+            {fileName && (
+              <p className="text-sm font-medium text-emerald-600 bg-emerald-50 px-5 py-2 rounded-full border border-emerald-100">
+                {fileName} loaded successfully
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-2xl bg-slate-100 text-slate-700 flex items-center justify-center">
+              <DatabaseBackup className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">Backup & Reports</h3>
+              <p className="text-sm text-slate-500">
+                Protect records and export the current report scope.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3">
+            <button
+              onClick={exportBackup}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800"
+            >
+              <Download className="w-4 h-4" />
+              Download JSON Backup
+            </button>
+
+            <button
+              onClick={() => backupInputRef.current?.click()}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              <UploadIcon className="w-4 h-4" />
+              Restore JSON Backup
+            </button>
+
+            <button
+              onClick={handleExcelExport}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 hover:bg-emerald-100"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              Export Excel Report
+            </button>
+          </div>
+
+          <input
+            ref={backupInputRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (file) {
+                await handleBackupImport(file);
+              }
+              e.target.value = "";
+            }}
+          />
+
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+            <p className="font-semibold text-slate-900">Current export scope</p>
+            <p className="mt-1">
+              The backup saves everything. The Excel export follows your global month filter:{" "}
+              <span className="font-semibold">{filterLabel}</span>.
+            </p>
+          </div>
         </div>
       </div>
 
@@ -98,6 +242,10 @@ export function Dashboard() {
             onClick={() => {
               if (window.confirm("Clear all uploaded attendance history?")) {
                 clearAllAttendanceHistory();
+                setFeedback({
+                  type: "success",
+                  message: "All uploaded attendance history was cleared.",
+                });
               }
             }}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 font-medium"
@@ -126,7 +274,8 @@ export function Dashboard() {
                     Uploaded: {new Date(file.uploadedAt).toLocaleString("en-US")}
                   </p>
                   <p className="text-xs text-slate-500 mt-1">
-                    {file.lateRecords.length} late record(s) • {file.generatedUndertimes.length} undertime record(s)
+                    {file.lateRecords.length} late record(s) •{" "}
+                    {file.generatedUndertimes.length} undertime record(s)
                   </p>
                 </div>
 
@@ -160,7 +309,8 @@ export function Dashboard() {
                   Memo / Penalty Reminder
                 </h3>
                 <p className="text-sm text-amber-800 mt-1">
-                  Employees who reached 4 lates and above are now visible in the notification bell.
+                  Employees who reached 4 lates and above are now visible in the
+                  notification bell.
                 </p>
               </div>
             </div>
@@ -221,14 +371,14 @@ export function Dashboard() {
           },
           {
             label: "Undertime Cases",
-            value: generatedUndertimes.length,
+            value: generatedUndertimes.length + manualUndertimes.length,
             icon: Timer,
             color: "text-purple-600",
             bg: "bg-purple-100",
           },
           {
-            label: "Total Absences",
-            value: absences.length,
+            label: "Total Exceptions",
+            value: absences.length + exemptions.length,
             icon: ShieldAlert,
             color: "text-red-600",
             bg: "bg-red-100",
@@ -238,7 +388,9 @@ export function Dashboard() {
             key={i}
             className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4"
           >
-            <div className={`w-12 h-12 rounded-xl ${stat.bg} ${stat.color} flex items-center justify-center`}>
+            <div
+              className={`w-12 h-12 rounded-xl ${stat.bg} ${stat.color} flex items-center justify-center`}
+            >
               <stat.icon className="w-6 h-6" />
             </div>
 
@@ -260,87 +412,62 @@ export function Dashboard() {
           </h3>
 
           {topLates.length > 0 ? (
-            <div className="h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart
-                  data={topLates}
-                  margin={{ top: 10, right: 20, left: -20, bottom: 0 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                  <XAxis
-                    dataKey="name"
-                    tick={{ fontSize: 11, fill: "#64748B" }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    tick={{ fontSize: 11, fill: "#64748B" }}
-                    axisLine={false}
-                    tickLine={false}
-                    allowDecimals={false}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      borderRadius: "12px",
-                      border: "1px solid #E2E8F0",
-                      boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
-                    }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="totalLates"
-                    stroke="#2563EB"
-                    strokeWidth={3}
-                    dot={{ r: 3, fill: "#2563EB" }}
-                    activeDot={{ r: 5 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={topLates}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                <YAxis allowDecimals={false} />
+                <Tooltip />
+                <Line type="monotone" dataKey="totalLates" strokeWidth={3} />
+              </LineChart>
+            </ResponsiveContainer>
           ) : (
-            <div className="h-72 flex flex-col items-center justify-center text-slate-400">
-              <BarChart3 className="w-12 h-12 mb-3 opacity-20" />
-              <p>No data available to display chart</p>
+            <div className="h-[300px] flex items-center justify-center text-center text-slate-400">
+              <div>
+                <BarChart3 className="w-12 h-12 mx-auto mb-4 opacity-20" />
+                <p className="text-lg font-medium text-slate-600">No chart data yet</p>
+                <p className="text-sm text-slate-400 mt-1">
+                  Upload attendance files to populate this chart.
+                </p>
+              </div>
             </div>
           )}
         </div>
 
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5 min-h-[360px]">
-          <h3 className="text-lg font-bold text-slate-900 mb-5">Quick Summary</h3>
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
+          <h3 className="text-lg font-bold text-slate-900 mb-4">Top Employees This Scope</h3>
 
-          <div className="space-y-4">
-            {topLates.length > 0 ? (
-              topLates.map((person, i) => (
+          {topLates.length > 0 ? (
+            <div className="space-y-3">
+              {topLates.map((employee, index) => (
                 <div
-                  key={i}
-                  className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3"
+                  key={employee.name}
+                  className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 p-4"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-xs font-bold text-slate-700">
-                      {i + 1}
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-sm">
+                      {index + 1}
                     </div>
-
-                    <div>
-                      <p className="text-sm font-semibold text-slate-900">
-                        {person.name}
-                      </p>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-slate-900 truncate">{employee.name}</p>
                       <p className="text-xs text-slate-500">
-                        {person.totalMinutesLate} mins total
+                        {employee.totalMinutesLate} total late minutes
                       </p>
                     </div>
                   </div>
 
-                  <span className="px-3 py-1 rounded-xl text-xs font-semibold bg-amber-100 text-amber-800">
-                    {person.totalLates} lates
-                  </span>
+                  <div className="text-right">
+                    <p className="text-lg font-bold text-slate-900">{employee.totalLates}</p>
+                    <p className="text-xs text-slate-500">lates</p>
+                  </div>
                 </div>
-              ))
-            ) : (
-              <div className="h-72 flex items-center justify-center text-sm text-slate-400">
-                Upload a file to see rankings.
-              </div>
-            )}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">
+              No employee late summary available yet.
+            </div>
+          )}
         </div>
       </div>
     </div>

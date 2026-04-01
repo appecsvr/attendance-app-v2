@@ -82,6 +82,7 @@ interface PersistedAttendanceData {
   absences: AbsentRecord[];
   manualUndertimes: UndertimeRecord[];
   readMemoEmployeeNames: string[];
+  selectedMonth: string;
 }
 
 interface AttendanceState {
@@ -95,6 +96,9 @@ interface AttendanceState {
   manualUndertimes: UndertimeRecord[];
   memoAlerts: MemoAlert[];
   unreadMemoCount: number;
+  monthOptions: string[];
+  selectedMonth: string;
+  setSelectedMonth: (month: string) => void;
   handleFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   addExemption: (ex: Omit<Exemption, "id">) => {
     success: boolean;
@@ -108,11 +112,20 @@ interface AttendanceState {
   deleteExemptionsByMonth: (monthKey: string) => void;
   deleteManualUndertimesByMonth: (monthKey: string) => void;
   markAllMemoAlertsAsRead: () => void;
+  exportBackup: () => void;
+  importBackupFile: (file: File) => Promise<{ success: boolean; message: string }>;
+  exportFilteredWorkbook: () => { success: boolean; message: string };
 }
 
 const AttendanceContext = createContext<AttendanceState | undefined>(undefined);
 
-const STORAGE_KEY = "attendance-system-v3";
+const STORAGE_KEY = "attendance-system-v4";
+const BACKUP_VERSION = "1.0.0";
+
+type BackupPayload = PersistedAttendanceData & {
+  backupVersion: string;
+  exportedAt: string;
+};
 
 function createId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -137,29 +150,27 @@ function getMonthKey(dateValue: string) {
   return `${year}-${month}`;
 }
 
+function getDefaultStoredData(): PersistedAttendanceData {
+  return {
+    fileName: "",
+    uploadedFiles: [],
+    exemptions: [],
+    absences: [],
+    manualUndertimes: [],
+    readMemoEmployeeNames: [],
+    selectedMonth: "all",
+  };
+}
+
 function getStoredData(): PersistedAttendanceData {
   if (typeof window === "undefined") {
-    return {
-      fileName: "",
-      uploadedFiles: [],
-      exemptions: [],
-      absences: [],
-      manualUndertimes: [],
-      readMemoEmployeeNames: [],
-    };
+    return getDefaultStoredData();
   }
 
   const raw = window.localStorage.getItem(STORAGE_KEY);
 
   if (!raw) {
-    return {
-      fileName: "",
-      uploadedFiles: [],
-      exemptions: [],
-      absences: [],
-      manualUndertimes: [],
-      readMemoEmployeeNames: [],
-    };
+    return getDefaultStoredData();
   }
 
   try {
@@ -172,17 +183,31 @@ function getStoredData(): PersistedAttendanceData {
       absences: parsed.absences ?? [],
       manualUndertimes: parsed.manualUndertimes ?? [],
       readMemoEmployeeNames: parsed.readMemoEmployeeNames ?? [],
+      selectedMonth: parsed.selectedMonth ?? "all",
     };
   } catch {
-    return {
-      fileName: "",
-      uploadedFiles: [],
-      exemptions: [],
-      absences: [],
-      manualUndertimes: [],
-      readMemoEmployeeNames: [],
-    };
+    return getDefaultStoredData();
   }
+}
+
+function makeDownload(blob: Blob, fileName: string) {
+  const url = window.URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+function readFileAsText(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(new Error("Unable to read file."));
+    reader.readAsText(file);
+  });
 }
 
 export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
@@ -192,43 +217,48 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedAttendanceFile[]>(
     initialData.uploadedFiles
   );
-  const [exemptions, setExemptions] = useState<Exemption[]>(initialData.exemptions);
-  const [absences, setAbsences] = useState<AbsentRecord[]>(initialData.absences);
-  const [manualUndertimes, setManualUndertimes] = useState<UndertimeRecord[]>(
+  const [exemptionsState, setExemptions] = useState<Exemption[]>(initialData.exemptions);
+  const [absencesState, setAbsences] = useState<AbsentRecord[]>(initialData.absences);
+  const [manualUndertimesState, setManualUndertimes] = useState<UndertimeRecord[]>(
     initialData.manualUndertimes
   );
   const [readMemoEmployeeNames, setReadMemoEmployeeNames] = useState<string[]>(
     initialData.readMemoEmployeeNames
+  );
+  const [selectedMonth, setSelectedMonth] = useState<string>(
+    initialData.selectedMonth || "all"
   );
 
   useEffect(() => {
     const payload: PersistedAttendanceData = {
       fileName,
       uploadedFiles,
-      exemptions,
-      absences,
-      manualUndertimes,
+      exemptions: exemptionsState,
+      absences: absencesState,
+      manualUndertimes: manualUndertimesState,
       readMemoEmployeeNames,
+      selectedMonth,
     };
 
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   }, [
     fileName,
     uploadedFiles,
-    exemptions,
-    absences,
-    manualUndertimes,
+    exemptionsState,
+    absencesState,
+    manualUndertimesState,
     readMemoEmployeeNames,
+    selectedMonth,
   ]);
 
-  const lateRecords = useMemo(() => {
+  const rawLateRecords = useMemo(() => {
     const allRawLateRecords = uploadedFiles.flatMap((file) => file.lateRecords);
 
     if (allRawLateRecords.length === 0) return [];
 
     const exemptionCountMap = new Map<string, number>();
 
-    exemptions.forEach((ex) => {
+    exemptionsState.forEach((ex) => {
       const exemptionDate = normalizeDate(ex.date);
       const key = `${normalizeName(ex.name)}|${exemptionDate}`;
       exemptionCountMap.set(key, (exemptionCountMap.get(key) ?? 0) + 1);
@@ -248,7 +278,46 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
 
       return true;
     });
-  }, [uploadedFiles, exemptions]);
+  }, [uploadedFiles, exemptionsState]);
+
+  const rawGeneratedUndertimes = useMemo(() => {
+    return uploadedFiles
+      .flatMap((file) => file.generatedUndertimes)
+      .sort((a, b) => {
+        const aDate = new Date(`${a.date} ${a.timeIn}`).getTime();
+        const bDate = new Date(`${b.date} ${b.timeIn}`).getTime();
+        return bDate - aDate;
+      });
+  }, [uploadedFiles]);
+
+  const monthOptions = useMemo(() => {
+    const allMonths = new Set<string>();
+
+    rawLateRecords.forEach((record) => allMonths.add(getMonthKey(record.date)));
+    rawGeneratedUndertimes.forEach((record) => allMonths.add(getMonthKey(record.date)));
+    exemptionsState.forEach((record) => allMonths.add(getMonthKey(record.date)));
+    absencesState.forEach((record) => allMonths.add(getMonthKey(record.date)));
+    manualUndertimesState.forEach((record) => allMonths.add(getMonthKey(record.date)));
+
+    return Array.from(allMonths).sort((a, b) => b.localeCompare(a));
+  }, [
+    rawLateRecords,
+    rawGeneratedUndertimes,
+    exemptionsState,
+    absencesState,
+    manualUndertimesState,
+  ]);
+
+  useEffect(() => {
+    if (selectedMonth !== "all" && !monthOptions.includes(selectedMonth)) {
+      setSelectedMonth("all");
+    }
+  }, [monthOptions, selectedMonth]);
+
+  const lateRecords = useMemo(() => {
+    if (selectedMonth === "all") return rawLateRecords;
+    return rawLateRecords.filter((record) => getMonthKey(record.date) === selectedMonth);
+  }, [rawLateRecords, selectedMonth]);
 
   const lateSummary = useMemo<LateSummary[]>(() => {
     const lateCount: Record<string, { lates: number; minutes: number }> = {};
@@ -277,14 +346,28 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
   }, [lateRecords]);
 
   const generatedUndertimes = useMemo(() => {
-    return uploadedFiles
-      .flatMap((file) => file.generatedUndertimes)
-      .sort((a, b) => {
-        const aDate = new Date(`${a.date} ${a.timeIn}`).getTime();
-        const bDate = new Date(`${b.date} ${b.timeIn}`).getTime();
-        return bDate - aDate;
-      });
-  }, [uploadedFiles]);
+    if (selectedMonth === "all") return rawGeneratedUndertimes;
+    return rawGeneratedUndertimes.filter(
+      (record) => getMonthKey(record.date) === selectedMonth
+    );
+  }, [rawGeneratedUndertimes, selectedMonth]);
+
+  const exemptions = useMemo(() => {
+    if (selectedMonth === "all") return exemptionsState;
+    return exemptionsState.filter((record) => getMonthKey(record.date) === selectedMonth);
+  }, [exemptionsState, selectedMonth]);
+
+  const absences = useMemo(() => {
+    if (selectedMonth === "all") return absencesState;
+    return absencesState.filter((record) => getMonthKey(record.date) === selectedMonth);
+  }, [absencesState, selectedMonth]);
+
+  const manualUndertimes = useMemo(() => {
+    if (selectedMonth === "all") return manualUndertimesState;
+    return manualUndertimesState.filter(
+      (record) => getMonthKey(record.date) === selectedMonth
+    );
+  }, [manualUndertimesState, selectedMonth]);
 
   const memoAlerts = useMemo<MemoAlert[]>(() => {
     const readSet = new Set(readMemoEmployeeNames.map((name) => normalizeName(name)));
@@ -456,6 +539,11 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
         setUploadedFiles((prev) => [newUploadedFile, ...prev]);
         setFileName(file.name);
 
+        const uploadedMonth = parsedLateRecords[0]?.date || parsedGeneratedUndertime[0]?.date;
+        if (uploadedMonth) {
+          setSelectedMonth(getMonthKey(uploadedMonth));
+        }
+
         if (e.target) {
           e.target.value = "";
         }
@@ -472,7 +560,7 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
     const exemptionDate = normalizeDate(ex.date);
     const normalizedExemptionName = normalizeName(ex.name);
 
-    const matchingLateRecords = lateRecords.filter(
+    const matchingLateRecords = rawLateRecords.filter(
       (record) =>
         normalizeName(record.name) === normalizedExemptionName &&
         record.date === exemptionDate
@@ -485,7 +573,7 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
       };
     }
 
-    const sameExemptionExists = exemptions.some(
+    const sameExemptionExists = exemptionsState.some(
       (item) =>
         normalizeName(item.name) === normalizedExemptionName &&
         normalizeDate(item.date) === exemptionDate &&
@@ -505,6 +593,7 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
     };
 
     setExemptions((prev) => [newExemption, ...prev]);
+    setSelectedMonth(getMonthKey(ex.date));
 
     return {
       success: true,
@@ -519,6 +608,7 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
     };
 
     setAbsences((prev) => [newAbsence, ...prev]);
+    setSelectedMonth(getMonthKey(ab.date));
   };
 
   const addUndertime = (ut: Omit<UndertimeRecord, "id">) => {
@@ -528,6 +618,7 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
     };
 
     setManualUndertimes((prev) => [newUndertime, ...prev]);
+    setSelectedMonth(getMonthKey(ut.date));
   };
 
   const deleteUploadedFile = (fileId: string) => {
@@ -542,6 +633,7 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
     setFileName("");
     setUploadedFiles([]);
     setReadMemoEmployeeNames([]);
+    setSelectedMonth("all");
   };
 
   const deleteAbsencesByMonth = (monthKey: string) => {
@@ -564,7 +656,157 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
 
   const markAllMemoAlertsAsRead = () => {
     const uniqueNames = Array.from(new Set(memoAlerts.map((item) => item.name.trim())));
-    setReadMemoEmployeeNames(uniqueNames);
+    setReadMemoEmployeeNames((prev) => Array.from(new Set([...prev, ...uniqueNames])));
+  };
+
+  const exportBackup = () => {
+    const payload: BackupPayload = {
+      backupVersion: BACKUP_VERSION,
+      exportedAt: new Date().toISOString(),
+      fileName,
+      uploadedFiles,
+      exemptions: exemptionsState,
+      absences: absencesState,
+      manualUndertimes: manualUndertimesState,
+      readMemoEmployeeNames,
+      selectedMonth,
+    };
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json",
+    });
+
+    const stamp = new Date().toISOString().slice(0, 10);
+    makeDownload(blob, `attendance-backup-${stamp}.json`);
+  };
+
+  const importBackupFile = async (file: File) => {
+    try {
+      const text = await readFileAsText(file);
+      const parsed = JSON.parse(text) as Partial<BackupPayload>;
+
+      if (!Array.isArray(parsed.uploadedFiles)) {
+        return {
+          success: false,
+          message: "Invalid backup file. Uploaded files are missing.",
+        };
+      }
+
+      setFileName(parsed.fileName ?? "");
+      setUploadedFiles(parsed.uploadedFiles ?? []);
+      setExemptions(parsed.exemptions ?? []);
+      setAbsences(parsed.absences ?? []);
+      setManualUndertimes(parsed.manualUndertimes ?? []);
+      setReadMemoEmployeeNames(parsed.readMemoEmployeeNames ?? []);
+      setSelectedMonth(parsed.selectedMonth ?? "all");
+
+      return {
+        success: true,
+        message: `Backup imported successfully from ${file.name}.`,
+      };
+    } catch (error) {
+      console.error("Backup import failed:", error);
+      return {
+        success: false,
+        message: "Backup import failed. Please use a valid JSON backup file.",
+      };
+    }
+  };
+
+  const exportFilteredWorkbook = () => {
+    try {
+      const workbook = XLSX.utils.book_new();
+
+      const lateRows = lateRecords.map((record) => ({
+        Employee: record.name,
+        Date: record.date,
+        TimeIn: record.timeIn,
+        MinutesLate: record.minutesLate,
+        SecondsLate: record.secondsLate,
+        SourceFile: record.sourceFileName,
+      }));
+
+      const summaryRows = lateSummary.map((item) => ({
+        Employee: item.name,
+        TotalLates: item.totalLates,
+        TotalMinutesLate: item.totalMinutesLate,
+      }));
+
+      const exemptionRows = exemptions.map((item) => ({
+        Employee: item.name,
+        Date: item.date,
+        Reason: item.reason,
+      }));
+
+      const absenceRows = absences.map((item) => ({
+        Employee: item.name,
+        Date: item.date,
+        Reason: item.reason,
+      }));
+
+      const generatedUndertimeRows = generatedUndertimes.map((item) => ({
+        Employee: item.name,
+        Date: item.date,
+        TimeIn: item.timeIn,
+        SourceFile: item.sourceFileName,
+      }));
+
+      const manualUndertimeRows = manualUndertimes.map((item) => ({
+        Employee: item.name,
+        Date: item.date,
+        Hours: item.undertimeHours,
+        Reason: item.reason,
+      }));
+
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.json_to_sheet(lateRows.length ? lateRows : [{ Message: "No data" }]),
+        "Late Records"
+      );
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.json_to_sheet(summaryRows.length ? summaryRows : [{ Message: "No data" }]),
+        "Late Summary"
+      );
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.json_to_sheet(exemptionRows.length ? exemptionRows : [{ Message: "No data" }]),
+        "Exemptions"
+      );
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.json_to_sheet(absenceRows.length ? absenceRows : [{ Message: "No data" }]),
+        "Absences"
+      );
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.json_to_sheet(
+          generatedUndertimeRows.length ? generatedUndertimeRows : [{ Message: "No data" }]
+        ),
+        "System Undertime"
+      );
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.json_to_sheet(
+          manualUndertimeRows.length ? manualUndertimeRows : [{ Message: "No data" }]
+        ),
+        "Manual Undertime"
+      );
+
+      const suffix = selectedMonth === "all" ? "all-months" : selectedMonth;
+      XLSX.writeFile(workbook, `attendance-report-${suffix}.xlsx`);
+
+      return {
+        success: true,
+        message: "Excel report exported successfully.",
+      };
+    } catch (error) {
+      console.error("Excel export failed:", error);
+      return {
+        success: false,
+        message: "Excel export failed. Please try again.",
+      };
+    }
   };
 
   return (
@@ -580,6 +822,9 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
         manualUndertimes,
         memoAlerts,
         unreadMemoCount,
+        monthOptions,
+        selectedMonth,
+        setSelectedMonth,
         handleFileUpload,
         addExemption,
         addAbsence,
@@ -590,6 +835,9 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
         deleteExemptionsByMonth,
         deleteManualUndertimesByMonth,
         markAllMemoAlertsAsRead,
+        exportBackup,
+        importBackupFile,
+        exportFilteredWorkbook,
       }}
     >
       {children}
