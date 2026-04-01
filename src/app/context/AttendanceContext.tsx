@@ -16,6 +16,8 @@ export interface LateRecord {
   minutesLate: number;
   secondsLate: number;
   totalSecondsLate: number;
+  sourceFileId: string;
+  sourceFileName: string;
 }
 
 export interface LateSummary {
@@ -29,6 +31,8 @@ export interface GeneratedUndertime {
   name: string;
   date: string;
   timeIn: string;
+  sourceFileId: string;
+  sourceFileName: string;
 }
 
 export interface Exemption {
@@ -63,10 +67,17 @@ export interface MemoAlert {
   isRead: boolean;
 }
 
+export interface UploadedAttendanceFile {
+  id: string;
+  fileName: string;
+  uploadedAt: string;
+  lateRecords: LateRecord[];
+  generatedUndertimes: GeneratedUndertime[];
+}
+
 interface PersistedAttendanceData {
   fileName: string;
-  rawLateRecords: LateRecord[];
-  rawGeneratedUndertimes: GeneratedUndertime[];
+  uploadedFiles: UploadedAttendanceFile[];
   exemptions: Exemption[];
   absences: AbsentRecord[];
   manualUndertimes: UndertimeRecord[];
@@ -75,6 +86,7 @@ interface PersistedAttendanceData {
 
 interface AttendanceState {
   fileName: string;
+  uploadedFiles: UploadedAttendanceFile[];
   lateRecords: LateRecord[];
   lateSummary: LateSummary[];
   generatedUndertimes: GeneratedUndertime[];
@@ -90,12 +102,14 @@ interface AttendanceState {
   };
   addAbsence: (ab: Omit<AbsentRecord, "id">) => void;
   addUndertime: (ut: Omit<UndertimeRecord, "id">) => void;
+  deleteUploadedFile: (fileId: string) => void;
+  clearAllAttendanceHistory: () => void;
   markAllMemoAlertsAsRead: () => void;
 }
 
 const AttendanceContext = createContext<AttendanceState | undefined>(undefined);
 
-const STORAGE_KEY = "attendance-system-v2";
+const STORAGE_KEY = "attendance-system-v3";
 
 function createId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -117,8 +131,7 @@ function getStoredData(): PersistedAttendanceData {
   if (typeof window === "undefined") {
     return {
       fileName: "",
-      rawLateRecords: [],
-      rawGeneratedUndertimes: [],
+      uploadedFiles: [],
       exemptions: [],
       absences: [],
       manualUndertimes: [],
@@ -131,8 +144,7 @@ function getStoredData(): PersistedAttendanceData {
   if (!raw) {
     return {
       fileName: "",
-      rawLateRecords: [],
-      rawGeneratedUndertimes: [],
+      uploadedFiles: [],
       exemptions: [],
       absences: [],
       manualUndertimes: [],
@@ -145,8 +157,7 @@ function getStoredData(): PersistedAttendanceData {
 
     return {
       fileName: parsed.fileName ?? "",
-      rawLateRecords: parsed.rawLateRecords ?? [],
-      rawGeneratedUndertimes: parsed.rawGeneratedUndertimes ?? [],
+      uploadedFiles: parsed.uploadedFiles ?? [],
       exemptions: parsed.exemptions ?? [],
       absences: parsed.absences ?? [],
       manualUndertimes: parsed.manualUndertimes ?? [],
@@ -155,8 +166,7 @@ function getStoredData(): PersistedAttendanceData {
   } catch {
     return {
       fileName: "",
-      rawLateRecords: [],
-      rawGeneratedUndertimes: [],
+      uploadedFiles: [],
       exemptions: [],
       absences: [],
       manualUndertimes: [],
@@ -169,12 +179,9 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
   const initialData = getStoredData();
 
   const [fileName, setFileName] = useState(initialData.fileName);
-  const [rawLateRecords, setRawLateRecords] = useState<LateRecord[]>(
-    initialData.rawLateRecords
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedAttendanceFile[]>(
+    initialData.uploadedFiles
   );
-  const [rawGeneratedUndertimes, setRawGeneratedUndertimes] = useState<
-    GeneratedUndertime[]
-  >(initialData.rawGeneratedUndertimes);
   const [exemptions, setExemptions] = useState<Exemption[]>(initialData.exemptions);
   const [absences, setAbsences] = useState<AbsentRecord[]>(initialData.absences);
   const [manualUndertimes, setManualUndertimes] = useState<UndertimeRecord[]>(
@@ -187,8 +194,7 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const payload: PersistedAttendanceData = {
       fileName,
-      rawLateRecords,
-      rawGeneratedUndertimes,
+      uploadedFiles,
       exemptions,
       absences,
       manualUndertimes,
@@ -198,8 +204,7 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   }, [
     fileName,
-    rawLateRecords,
-    rawGeneratedUndertimes,
+    uploadedFiles,
     exemptions,
     absences,
     manualUndertimes,
@@ -207,7 +212,9 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
   ]);
 
   const lateRecords = useMemo(() => {
-    if (rawLateRecords.length === 0) return [];
+    const allRawLateRecords = uploadedFiles.flatMap((file) => file.lateRecords);
+
+    if (allRawLateRecords.length === 0) return [];
 
     const exemptionCountMap = new Map<string, number>();
 
@@ -219,7 +226,7 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
 
     const consumedExemptions = new Map<string, number>();
 
-    return rawLateRecords.filter((record) => {
+    return allRawLateRecords.filter((record) => {
       const key = `${normalizeName(record.name)}|${record.date}`;
       const allowedExemptions = exemptionCountMap.get(key) ?? 0;
       const alreadyConsumed = consumedExemptions.get(key) ?? 0;
@@ -231,7 +238,7 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
 
       return true;
     });
-  }, [rawLateRecords, exemptions]);
+  }, [uploadedFiles, exemptions]);
 
   const lateSummary = useMemo<LateSummary[]>(() => {
     const lateCount: Record<string, { lates: number; minutes: number }> = {};
@@ -260,12 +267,14 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
   }, [lateRecords]);
 
   const generatedUndertimes = useMemo(() => {
-    return [...rawGeneratedUndertimes].sort((a, b) => {
-      const aDate = new Date(`${a.date} ${a.timeIn}`).getTime();
-      const bDate = new Date(`${b.date} ${b.timeIn}`).getTime();
-      return bDate - aDate;
-    });
-  }, [rawGeneratedUndertimes]);
+    return uploadedFiles
+      .flatMap((file) => file.generatedUndertimes)
+      .sort((a, b) => {
+        const aDate = new Date(`${a.date} ${a.timeIn}`).getTime();
+        const bDate = new Date(`${b.date} ${b.timeIn}`).getTime();
+        return bDate - aDate;
+      });
+  }, [uploadedFiles]);
 
   const memoAlerts = useMemo<MemoAlert[]>(() => {
     const readSet = new Set(readMemoEmployeeNames.map((name) => normalizeName(name)));
@@ -298,8 +307,25 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
         const data = event.target?.result;
         const workbook = XLSX.read(data, { type: "binary" });
 
+        const newFileId = createId();
         const parsedLateRecords: LateRecord[] = [];
         const parsedGeneratedUndertime: GeneratedUndertime[] = [];
+
+        const allExistingLateKeys = new Set(
+          uploadedFiles.flatMap((uploadedFile) =>
+            uploadedFile.lateRecords.map((record) =>
+              makeRecordKey(record.name, record.date, record.timeIn)
+            )
+          )
+        );
+
+        const allExistingUndertimeKeys = new Set(
+          uploadedFiles.flatMap((uploadedFile) =>
+            uploadedFile.generatedUndertimes.map((record) =>
+              makeRecordKey(record.name, record.date, record.timeIn)
+            )
+          )
+        );
 
         workbook.SheetNames.forEach((sheetName) => {
           const worksheet = workbook.Sheets[sheetName];
@@ -370,65 +396,56 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
 
             const timeIn = dateTime.toLocaleTimeString("en-US");
             const dateStr = dateTime.toLocaleDateString("en-US");
+            const recordKey = makeRecordKey(name, dateStr, timeIn);
 
             if (isUndertime) {
-              parsedGeneratedUndertime.push({
-                id: createId(),
-                name,
-                date: dateStr,
-                timeIn,
-              });
+              if (!allExistingUndertimeKeys.has(recordKey)) {
+                allExistingUndertimeKeys.add(recordKey);
+                parsedGeneratedUndertime.push({
+                  id: createId(),
+                  name,
+                  date: dateStr,
+                  timeIn,
+                  sourceFileId: newFileId,
+                  sourceFileName: file.name,
+                });
+              }
             } else if (isLate) {
-              parsedLateRecords.push({
-                id: createId(),
-                name,
-                date: dateStr,
-                timeIn,
-                minutesLate,
-                secondsLate,
-                totalSecondsLate: totalSecondsLateValue,
-              });
+              if (!allExistingLateKeys.has(recordKey)) {
+                allExistingLateKeys.add(recordKey);
+                parsedLateRecords.push({
+                  id: createId(),
+                  name,
+                  date: dateStr,
+                  timeIn,
+                  minutesLate,
+                  secondsLate,
+                  totalSecondsLate: totalSecondsLateValue,
+                  sourceFileId: newFileId,
+                  sourceFileName: file.name,
+                });
+              }
             }
           }
         });
 
-        setRawLateRecords((prev) => {
-          const existingKeys = new Set(
-            prev.map((record) => makeRecordKey(record.name, record.date, record.timeIn))
-          );
-
-          const uniqueNewRecords = parsedLateRecords.filter((record) => {
-            const key = makeRecordKey(record.name, record.date, record.timeIn);
-            if (existingKeys.has(key)) return false;
-            existingKeys.add(key);
-            return true;
-          });
-
-          return [...uniqueNewRecords, ...prev].sort((a, b) => {
+        const newUploadedFile: UploadedAttendanceFile = {
+          id: newFileId,
+          fileName: file.name,
+          uploadedAt: new Date().toISOString(),
+          lateRecords: parsedLateRecords.sort((a, b) => {
             const aDate = new Date(`${a.date} ${a.timeIn}`).getTime();
             const bDate = new Date(`${b.date} ${b.timeIn}`).getTime();
             return bDate - aDate;
-          });
-        });
-
-        setRawGeneratedUndertimes((prev) => {
-          const existingKeys = new Set(
-            prev.map((record) => makeRecordKey(record.name, record.date, record.timeIn))
-          );
-
-          const uniqueNewRecords = parsedGeneratedUndertime.filter((record) => {
-            const key = makeRecordKey(record.name, record.date, record.timeIn);
-            if (existingKeys.has(key)) return false;
-            existingKeys.add(key);
-            return true;
-          });
-
-          return [...uniqueNewRecords, ...prev].sort((a, b) => {
+          }),
+          generatedUndertimes: parsedGeneratedUndertime.sort((a, b) => {
             const aDate = new Date(`${a.date} ${a.timeIn}`).getTime();
             const bDate = new Date(`${b.date} ${b.timeIn}`).getTime();
             return bDate - aDate;
-          });
-        });
+          }),
+        };
+
+        setUploadedFiles((prev) => [newUploadedFile, ...prev]);
 
         if (e.target) {
           e.target.value = "";
@@ -504,11 +521,18 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
     setManualUndertimes((prev) => [newUndertime, ...prev]);
   };
 
-  const markAllMemoAlertsAsRead = () => {
-    const uniqueNames = Array.from(
-      new Set(memoAlerts.map((item) => item.name.trim()))
-    );
+  const deleteUploadedFile = (fileId: string) => {
+    setUploadedFiles((prev) => prev.filter((file) => file.id !== fileId));
+  };
 
+  const clearAllAttendanceHistory = () => {
+    setFileName("");
+    setUploadedFiles([]);
+    setReadMemoEmployeeNames([]);
+  };
+
+  const markAllMemoAlertsAsRead = () => {
+    const uniqueNames = Array.from(new Set(memoAlerts.map((item) => item.name.trim())));
     setReadMemoEmployeeNames(uniqueNames);
   };
 
@@ -516,6 +540,7 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
     <AttendanceContext.Provider
       value={{
         fileName,
+        uploadedFiles,
         lateRecords,
         lateSummary,
         generatedUndertimes,
@@ -528,6 +553,8 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
         addExemption,
         addAbsence,
         addUndertime,
+        deleteUploadedFile,
+        clearAllAttendanceHistory,
         markAllMemoAlertsAsRead,
       }}
     >

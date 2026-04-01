@@ -9,6 +9,8 @@ import {
   BarChart3,
   Bell,
   AlertTriangle,
+  Trash2,
+  FolderOpen,
 } from "lucide-react";
 import {
   LineChart,
@@ -24,12 +26,15 @@ export function Dashboard() {
   const {
     handleFileUpload,
     fileName,
+    uploadedFiles,
     lateRecords,
     lateSummary,
     generatedUndertimes,
     absences,
     memoAlerts,
     unreadMemoCount,
+    deleteUploadedFile,
+    clearAllAttendanceHistory,
   } = useAttendance();
 
   const topLates = [...lateSummary].slice(0, 5);
@@ -39,7 +44,7 @@ export function Dashboard() {
       <div>
         <h1 className="text-4xl font-bold text-slate-900">Dashboard</h1>
         <p className="text-sm text-slate-500 mt-1">
-          Overview of employee attendance, stored records, and memo alerts
+          Overview of employee attendance, stored records, uploaded files, and memo alerts
         </p>
       </div>
 
@@ -52,7 +57,7 @@ export function Dashboard() {
           <div>
             <h3 className="text-2xl font-bold text-slate-900">Upload Attendance Data</h3>
             <p className="text-sm text-slate-500 max-w-xl mx-auto mt-2">
-              Import daily biometric Excel files. Records will continue counting and stay saved in the browser even after refresh.
+              Import daily biometric Excel files. Each upload is saved separately and can also be deleted separately.
             </p>
           </div>
 
@@ -71,6 +76,73 @@ export function Dashboard() {
             <p className="text-sm font-medium text-emerald-600 bg-emerald-50 px-5 py-2 rounded-full border border-emerald-100">
               {fileName} loaded successfully
             </p>
+          )}
+        </div>
+      </div>
+
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
+        <div className="flex items-center justify-between gap-4 flex-col sm:flex-row">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-2xl bg-slate-100 text-slate-700 flex items-center justify-center">
+              <FolderOpen className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">Uploaded Attendance Files</h3>
+              <p className="text-sm text-slate-500">
+                You can delete one file only, or clear all attendance history.
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => {
+              if (window.confirm("Clear all uploaded attendance history?")) {
+                clearAllAttendanceHistory();
+              }
+            }}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 font-medium"
+          >
+            <Trash2 className="w-4 h-4" />
+            Clear All History
+          </button>
+        </div>
+
+        <div className="mt-5 space-y-3">
+          {uploadedFiles.length === 0 ? (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">
+              No uploaded attendance files yet.
+            </div>
+          ) : (
+            uploadedFiles.map((file) => (
+              <div
+                key={file.id}
+                className="rounded-2xl border border-slate-200 bg-slate-50 p-4 flex items-center justify-between gap-4 flex-col sm:flex-row"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-slate-900 truncate">
+                    {file.fileName}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Uploaded: {new Date(file.uploadedAt).toLocaleString("en-US")}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {file.lateRecords.length} late record(s) • {file.generatedUndertimes.length} undertime record(s)
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => {
+                    if (window.confirm(`Delete ${file.fileName}?`)) {
+                      deleteUploadedFile(file.id);
+                    }
+                  }}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl border border-red-200 bg-white text-red-700 hover:bg-red-50 font-medium whitespace-nowrap"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Delete File
+                </button>
+              </div>
+            ))
           )}
         </div>
       </div>
@@ -166,9 +238,7 @@ export function Dashboard() {
             key={i}
             className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4"
           >
-            <div
-              className={`w-12 h-12 rounded-xl ${stat.bg} ${stat.color} flex items-center justify-center`}
-            >
+            <div className={`w-12 h-12 rounded-xl ${stat.bg} ${stat.color} flex items-center justify-center`}>
               <stat.icon className="w-6 h-6" />
             </div>
 
