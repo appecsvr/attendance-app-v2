@@ -24,30 +24,26 @@ const navigation = [
   { name: "Undertime", href: "/undertime", icon: Timer },
 ];
 
-function formatScopeLabel(scope: string) {
-  if (scope === "all") return "All Records";
+function formatMonthLabel(monthKey: string) {
+  if (monthKey === "all") return "All Months";
 
-  if (scope.startsWith("month:")) {
-    const monthKey = scope.replace("month:", "");
-    const [year, month] = monthKey.split("-");
-    const date = new Date(Number(year), Number(month) - 1, 1);
+  const [year, month] = monthKey.split("-");
+  const date = new Date(Number(year), Number(month) - 1, 1);
 
-    return date.toLocaleDateString("en-US", {
-      month: "long",
-      year: "numeric",
-    });
-  }
+  return date.toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+  });
+}
 
-  if (scope.startsWith("day:")) {
-    const dayValue = scope.replace("day:", "");
-    return new Date(dayValue).toLocaleDateString("en-US", {
-      month: "long",
-      day: "2-digit",
-      year: "numeric",
-    });
-  }
+function formatDayLabel(dayValue: string) {
+  if (dayValue === "all") return "All Dates";
 
-  return "All Records";
+  return new Date(dayValue).toLocaleDateString("en-US", {
+    month: "long",
+    day: "2-digit",
+    year: "numeric",
+  });
 }
 
 export function RootLayout() {
@@ -57,17 +53,21 @@ export function RootLayout() {
     memoAlerts,
     unreadMemoCount,
     markAllMemoAlertsAsRead,
-    scopeOptions,
-    selectedScope,
-    setSelectedScope,
+    monthScopeOptions,
+    dayScopeOptions,
+    selectedMonthScope,
+    selectedDayScope,
+    setSelectedMonthScope,
+    setSelectedDayScope,
   } = useAttendance();
 
   const [isBellOpen, setIsBellOpen] = useState(false);
 
-  const currentScopeLabel = useMemo(
-    () => formatScopeLabel(selectedScope),
-    [selectedScope]
-  );
+  const currentScopeLabel = useMemo(() => {
+    if (selectedDayScope !== "all") return formatDayLabel(selectedDayScope);
+    if (selectedMonthScope !== "all") return formatMonthLabel(selectedMonthScope);
+    return "All Records";
+  }, [selectedMonthScope, selectedDayScope]);
 
   return (
     <div className="min-h-screen bg-slate-100 flex">
@@ -163,17 +163,33 @@ export function RootLayout() {
             </div>
 
             <select
-              value={selectedScope}
-              onChange={(e) => setSelectedScope(e.target.value)}
+              value={selectedMonthScope}
+              onChange={(e) => {
+                const newMonth = e.target.value;
+                setSelectedMonthScope(newMonth);
+                setSelectedDayScope("all");
+              }}
+              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500 min-w-[180px]"
+            >
+              <option value="all">All Months</option>
+              {monthScopeOptions.map((month) => (
+                <option key={month} value={month}>
+                  {formatMonthLabel(month)}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={selectedDayScope}
+              onChange={(e) => setSelectedDayScope(e.target.value)}
               className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500 min-w-[220px]"
             >
-              {scopeOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.type === "month"
-                    ? `Month • ${option.label}`
-                    : option.type === "day"
-                    ? `Day • ${option.label}`
-                    : option.label}
+              <option value="all">
+                {selectedMonthScope === "all" ? "All Dates" : "All Dates in Month"}
+              </option>
+              {dayScopeOptions.map((day) => (
+                <option key={day} value={day}>
+                  {formatDayLabel(day)}
                 </option>
               ))}
             </select>
