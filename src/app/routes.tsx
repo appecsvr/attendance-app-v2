@@ -3,7 +3,7 @@ import { RootLayout } from "./components/layout/RootLayout";
 import { Dashboard } from "./pages/Dashboard";
 import { LateRecords } from "./pages/LateRecords";
 import { Exemptions } from "./pages/Exemptions";
-import Absences from "./pages/Absences";
+import { Absences } from "./pages/Absences";
 import { Undertime } from "./pages/Undertime";
 import EmployeesPage from "./pages/EmployeesPage";
 
