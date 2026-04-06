@@ -26,30 +26,26 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-function formatScopeLabel(scope: string) {
-  if (scope === "all") return "All Records";
+function formatMonthLabel(monthKey: string) {
+  if (monthKey === "all") return "All Months";
 
-  if (scope.startsWith("month:")) {
-    const monthKey = scope.replace("month:", "");
-    const [year, month] = monthKey.split("-");
-    const date = new Date(Number(year), Number(month) - 1, 1);
+  const [year, month] = monthKey.split("-");
+  const date = new Date(Number(year), Number(month) - 1, 1);
 
-    return date.toLocaleDateString("en-US", {
-      month: "long",
-      year: "numeric",
-    });
-  }
+  return date.toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+  });
+}
 
-  if (scope.startsWith("day:")) {
-    const dayValue = scope.replace("day:", "");
-    return new Date(dayValue).toLocaleDateString("en-US", {
-      month: "long",
-      day: "2-digit",
-      year: "numeric",
-    });
-  }
+function formatDayLabel(dayValue: string) {
+  if (dayValue === "all") return "All Dates";
 
-  return "All Records";
+  return new Date(dayValue).toLocaleDateString("en-US", {
+    month: "long",
+    day: "2-digit",
+    year: "numeric",
+  });
 }
 
 export function Dashboard() {
@@ -67,7 +63,8 @@ export function Dashboard() {
     unreadMemoCount,
     deleteUploadedFile,
     clearAllAttendanceHistory,
-    selectedScope,
+    selectedMonthScope,
+    selectedDayScope,
     exportFilteredWorkbook,
   } = useAttendance();
 
@@ -77,7 +74,13 @@ export function Dashboard() {
   } | null>(null);
 
   const topLates = [...lateSummary].slice(0, 5);
-  const filterLabel = formatScopeLabel(selectedScope);
+
+  const filterLabel =
+    selectedDayScope !== "all"
+      ? formatDayLabel(selectedDayScope)
+      : selectedMonthScope !== "all"
+      ? formatMonthLabel(selectedMonthScope)
+      : "All Records";
 
   const handleExcelExport = () => {
     const result = exportFilteredWorkbook();
@@ -213,7 +216,7 @@ export function Dashboard() {
                 clearAllAttendanceHistory();
                 setFeedback({
                   type: "success",
-                  message: "All uploaded attendance history was cleared.",
+                  message: "All uploaded attendance history and related records were cleared.",
                 });
               }
             }}
@@ -243,8 +246,7 @@ export function Dashboard() {
                     Uploaded: {new Date(file.uploadedAt).toLocaleString("en-US")}
                   </p>
                   <p className="text-xs text-slate-500 mt-1">
-                    {file.lateRecords.length} late record(s) •{" "}
-                    {file.generatedUndertimes.length} undertime record(s)
+                    {file.lateRecords.length} late record(s) • {file.generatedUndertimes.length} undertime record(s)
                   </p>
                 </div>
 
@@ -252,6 +254,11 @@ export function Dashboard() {
                   onClick={() => {
                     if (window.confirm(`Delete ${file.fileName}?`)) {
                       deleteUploadedFile(file.id);
+                      setFeedback({
+                        type: "success",
+                        message:
+                          "Uploaded file deleted. Related exemption, absence, and manual undertime records for removed dates were also cleaned.",
+                      });
                     }
                   }}
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl border border-red-200 bg-white text-red-700 hover:bg-red-50 font-medium whitespace-nowrap"
@@ -274,12 +281,9 @@ export function Dashboard() {
               </div>
 
               <div>
-                <h3 className="text-lg font-bold text-amber-900">
-                  Memo / Penalty Reminder
-                </h3>
+                <h3 className="text-lg font-bold text-amber-900">Memo / Penalty Reminder</h3>
                 <p className="text-sm text-amber-800 mt-1">
-                  Employees who reached 4 lates and above are now visible in the
-                  notification bell.
+                  Employees who reached 4 lates and above are now visible in the notification bell.
                 </p>
               </div>
             </div>
@@ -301,9 +305,7 @@ export function Dashboard() {
                       <AlertTriangle className="w-4 h-4" />
                     </div>
                     <div className="min-w-0">
-                      <p className="font-semibold text-slate-900 truncate">
-                        {alert.name}
-                      </p>
+                      <p className="font-semibold text-slate-900 truncate">{alert.name}</p>
                       <p className="text-xs text-slate-500">
                         {alert.totalMinutesLate} total late minutes
                       </p>
@@ -357,9 +359,7 @@ export function Dashboard() {
             key={i}
             className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4"
           >
-            <div
-              className={`w-12 h-12 rounded-xl ${stat.bg} ${stat.color} flex items-center justify-center`}
-            >
+            <div className={`w-12 h-12 rounded-xl ${stat.bg} ${stat.color} flex items-center justify-center`}>
               <stat.icon className="w-6 h-6" />
             </div>
 
