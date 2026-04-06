@@ -121,6 +121,8 @@ interface AttendanceState {
   deleteAbsencesByMonth: (monthKey: string) => void;
   deleteExemptionsByMonth: (monthKey: string) => void;
   deleteManualUndertimesByMonth: (monthKey: string) => void;
+  restoreExemption: (id: string) => void;
+  restoreManualUndertime: (id: string) => void;
   markAllMemoAlertsAsRead: () => void;
   exportFilteredWorkbook: () => { success: boolean; message: string };
 }
@@ -798,10 +800,18 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
     );
   };
 
+  const restoreExemption = (id: string) => {
+    setExemptions((prev) => prev.filter((record) => record.id !== id));
+  };
+
   const deleteManualUndertimesByMonth = (monthKey: string) => {
     setManualUndertimes((prev) =>
       prev.filter((record) => getMonthKey(record.date) !== monthKey)
     );
+  };
+
+  const restoreManualUndertime = (id: string) => {
+    setManualUndertimes((prev) => prev.filter((record) => record.id !== id));
   };
 
   const markAllMemoAlertsAsRead = () => {
@@ -939,6 +949,8 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
         deleteAbsencesByMonth,
         deleteExemptionsByMonth,
         deleteManualUndertimesByMonth,
+        restoreExemption,
+        restoreManualUndertime,
         markAllMemoAlertsAsRead,
         exportFilteredWorkbook,
       }}

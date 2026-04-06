@@ -7,6 +7,8 @@ import {
   Timer,
   AlertCircle,
   CheckCircle2,
+  RotateCcw,
+  Trash2,
 } from "lucide-react";
 
 function getMonthKey(dateValue: string) {
@@ -31,6 +33,8 @@ export function Undertime() {
     generatedUndertimes,
     manualUndertimes,
     addUndertime,
+    deleteManualUndertimesByMonth,
+    restoreManualUndertime,
   } = useAttendance();
 
   const [activeTab, setActiveTab] = useState<"system" | "manual">("manual");
@@ -57,10 +61,13 @@ export function Undertime() {
   }, [manualUndertimes]);
 
   const filteredManualUndertimes = useMemo(() => {
-    if (selectedMonth === "all") return manualUndertimes;
+    const filtered =
+      selectedMonth === "all"
+        ? manualUndertimes
+        : manualUndertimes.filter((record) => getMonthKey(record.date) === selectedMonth);
 
-    return manualUndertimes.filter(
-      (record) => getMonthKey(record.date) === selectedMonth
+    return [...filtered].sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
     );
   }, [manualUndertimes, selectedMonth]);
 
@@ -95,6 +102,20 @@ export function Undertime() {
       setPeriod("AM");
       setReason("");
       setSelectedMonth(getMonthKey(date));
+    }
+  };
+
+  const handleRestore = (id: string, name: string, dateValue: string) => {
+    if (
+      window.confirm(
+        `Restore ${name} on ${new Date(dateValue).toLocaleDateString("en-US")} back to Late Records?`
+      )
+    ) {
+      restoreManualUndertime(id);
+      setFeedback({
+        type: "success",
+        message: `${name} has been restored to Late Records.`,
+      });
     }
   };
 
@@ -291,18 +312,43 @@ export function Undertime() {
                 </div>
               </div>
 
-              <select
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
-                className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                <option value="all">All Months</option>
-                {monthOptions.map((month) => (
-                  <option key={month} value={month}>
-                    {formatMonthLabel(month)}
-                  </option>
-                ))}
-              </select>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <select
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="all">All Months</option>
+                  {monthOptions.map((month) => (
+                    <option key={month} value={month}>
+                      {formatMonthLabel(month)}
+                    </option>
+                  ))}
+                </select>
+
+                {selectedMonth !== "all" && (
+                  <button
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          `Delete all manual undertime records for ${formatMonthLabel(selectedMonth)}?`
+                        )
+                      ) {
+                        deleteManualUndertimesByMonth(selectedMonth);
+                        setSelectedMonth("all");
+                        setFeedback({
+                          type: "success",
+                          message: `All manual undertime records for ${formatMonthLabel(selectedMonth)} were removed and restored to Late Records.`,
+                        });
+                      }
+                    }}
+                    className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-2xl border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 text-sm font-medium"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Delete This Month
+                  </button>
+                )}
+              </div>
             </div>
 
             {filteredManualUndertimes.length === 0 ? (
@@ -331,8 +377,18 @@ export function Undertime() {
                         </p>
                       </div>
 
-                      <div className="text-sm text-slate-600">
-                        {record.reason}
+                      <div className="flex flex-col items-start sm:items-end gap-3">
+                        <div className="text-sm text-slate-600">{record.reason}</div>
+
+                        <button
+                          onClick={() =>
+                            handleRestore(record.id, record.name, record.date)
+                          }
+                          className="inline-flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100"
+                        >
+                          <RotateCcw className="w-4 h-4" />
+                          Restore
+                        </button>
                       </div>
                     </div>
                   </div>

@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   CalendarDays,
   Trash2,
+  RotateCcw,
 } from "lucide-react";
 import { useAttendance } from "../context/AttendanceContext";
 
@@ -29,7 +30,12 @@ function formatMonthLabel(monthKey: string) {
 }
 
 export function Exemptions() {
-  const { exemptions, addExemption, deleteExemptionsByMonth } = useAttendance();
+  const {
+    exemptions,
+    addExemption,
+    deleteExemptionsByMonth,
+    restoreExemption,
+  } = useAttendance();
 
   const [formData, setFormData] = useState({
     name: "",
@@ -98,6 +104,20 @@ export function Exemptions() {
       reason: "",
       date: "",
     });
+  };
+
+  const handleRestore = (id: string, name: string, date: string) => {
+    if (
+      window.confirm(
+        `Restore ${name} on ${new Date(date).toLocaleDateString("en-US")} back to Late Records?`
+      )
+    ) {
+      restoreExemption(id);
+      setFeedback({
+        type: "success",
+        message: `${name} has been restored to Late Records.`,
+      });
+    }
   };
 
   return (
@@ -227,6 +247,10 @@ export function Exemptions() {
                       ) {
                         deleteExemptionsByMonth(selectedMonth);
                         setSelectedMonth("all");
+                        setFeedback({
+                          type: "success",
+                          message: `All exemption records for ${formatMonthLabel(selectedMonth)} were removed and restored to Late Records.`,
+                        });
                       }
                     }}
                     className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 text-sm font-medium"
@@ -279,7 +303,7 @@ export function Exemptions() {
                     </div>
 
                     <div className="flex-1">
-                      <div className="flex items-start justify-between">
+                      <div className="flex items-start justify-between gap-4 flex-col sm:flex-row">
                         <div>
                           <h3 className="text-base font-bold text-slate-900">{record.name}</h3>
                           <p className="text-sm text-slate-500">
@@ -287,9 +311,19 @@ export function Exemptions() {
                           </p>
                         </div>
 
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-blue-100 text-blue-800">
-                          Exempted
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-blue-100 text-blue-800">
+                            Exempted
+                          </span>
+
+                          <button
+                            onClick={() => handleRestore(record.id, record.name, record.date)}
+                            className="inline-flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100"
+                          >
+                            <RotateCcw className="w-4 h-4" />
+                            Restore
+                          </button>
+                        </div>
                       </div>
 
                       <div className="mt-3 p-3 bg-slate-50 rounded-lg text-sm text-slate-700 border border-slate-100">
