@@ -91,13 +91,17 @@ export function Dashboard() {
   };
 
   const handleDragDropUpload = (file: File) => {
-    const fakeEvent = {
-      target: {
-        files: [file],
-      },
-    } as React.ChangeEvent<HTMLInputElement>;
+    const dataTransfer = new DataTransfer();
+    dataTransfer.items.add(file);
 
-    handleFileUpload(fakeEvent);
+    const input = document.createElement("input");
+    input.type = "file";
+    input.files = dataTransfer.files;
+
+    handleFileUpload({
+      target: input,
+      currentTarget: input,
+    } as React.ChangeEvent<HTMLInputElement>);
   };
 
   return (
@@ -106,7 +110,8 @@ export function Dashboard() {
         <div>
           <h1 className="text-4xl font-bold text-slate-900">Dashboard</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Overview of employee attendance, stored records, uploaded files, and memo alerts
+            Overview of employee attendance, stored records, uploaded files, and
+            memo alerts
           </p>
         </div>
 
@@ -129,10 +134,12 @@ export function Dashboard() {
           ) : (
             <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
           )}
+
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold">System Message</p>
             <p className="text-sm mt-1">{feedback.message}</p>
           </div>
+
           <button
             onClick={() => setFeedback(null)}
             className="text-xs font-semibold opacity-70 hover:opacity-100"
@@ -154,7 +161,8 @@ export function Dashboard() {
                 Upload Attendance Data
               </h3>
               <p className="text-sm text-slate-500 max-w-xl mx-auto mt-2">
-                Import daily biometric Excel files. Each upload is saved separately and can also be deleted separately.
+                Import daily biometric Excel files. Each upload is saved
+                separately and can also be deleted separately.
               </p>
             </div>
 
@@ -208,7 +216,9 @@ export function Dashboard() {
               <FolderOpen className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-slate-900">Uploaded Attendance Files</h3>
+              <h3 className="text-lg font-bold text-slate-900">
+                Uploaded Attendance Files
+              </h3>
               <p className="text-sm text-slate-500">
                 You can delete one file only, or clear all attendance history.
               </p>
@@ -221,7 +231,8 @@ export function Dashboard() {
                 clearAllAttendanceHistory();
                 setFeedback({
                   type: "success",
-                  message: "All uploaded attendance history and related records were cleared.",
+                  message:
+                    "All uploaded attendance history and related records were cleared.",
                 });
               }
             }}
@@ -287,9 +298,12 @@ export function Dashboard() {
               </div>
 
               <div>
-                <h3 className="text-lg font-bold text-amber-900">Penalty Reminder</h3>
+                <h3 className="text-lg font-bold text-amber-900">
+                  Penalty Reminder
+                </h3>
                 <p className="text-sm text-amber-800 mt-1">
-                  Employees who reached 4 lates and above are now visible in the notification bell.
+                  Employees who reached 4 lates and above are now visible in the
+                  notification bell.
                 </p>
               </div>
             </div>
@@ -311,7 +325,9 @@ export function Dashboard() {
                       <AlertTriangle className="w-4 h-4" />
                     </div>
                     <div className="min-w-0">
-                      <p className="font-semibold text-slate-900 truncate">{alert.name}</p>
+                      <p className="font-semibold text-slate-900 truncate">
+                        {alert.name}
+                      </p>
                       <p className="text-xs text-slate-500">
                         {alert.totalMinutesLate} total late minutes
                       </p>
@@ -365,7 +381,9 @@ export function Dashboard() {
             key={i}
             className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4"
           >
-            <div className={`w-12 h-12 rounded-xl ${stat.bg} ${stat.color} flex items-center justify-center`}>
+            <div
+              className={`w-12 h-12 rounded-xl ${stat.bg} ${stat.color} flex items-center justify-center`}
+            >
               <stat.icon className="w-6 h-6" />
             </div>
 
@@ -400,7 +418,9 @@ export function Dashboard() {
             <div className="h-[300px] flex items-center justify-center text-center text-slate-400">
               <div>
                 <BarChart3 className="w-12 h-12 mx-auto mb-4 opacity-20" />
-                <p className="text-lg font-medium text-slate-600">No chart data yet</p>
+                <p className="text-lg font-medium text-slate-600">
+                  No chart data yet
+                </p>
                 <p className="text-sm text-slate-400 mt-1">
                   Upload attendance files to populate this chart.
                 </p>
@@ -410,7 +430,9 @@ export function Dashboard() {
         </div>
 
         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-          <h3 className="text-lg font-bold text-slate-900 mb-4">Top Employees This Scope</h3>
+          <h3 className="text-lg font-bold text-slate-900 mb-4">
+            Top Employees This Scope
+          </h3>
 
           {topLates.length > 0 ? (
             <div className="space-y-3">
@@ -424,7 +446,9 @@ export function Dashboard() {
                       {index + 1}
                     </div>
                     <div className="min-w-0">
-                      <p className="font-semibold text-slate-900 truncate">{employee.name}</p>
+                      <p className="font-semibold text-slate-900 truncate">
+                        {employee.name}
+                      </p>
                       <p className="text-xs text-slate-500">
                         {employee.totalMinutesLate} total late minutes
                       </p>
@@ -432,7 +456,9 @@ export function Dashboard() {
                   </div>
 
                   <div className="text-right">
-                    <p className="text-lg font-bold text-slate-900">{employee.totalLates}</p>
+                    <p className="text-lg font-bold text-slate-900">
+                      {employee.totalLates}
+                    </p>
                     <p className="text-xs text-slate-500">lates</p>
                   </div>
                 </div>
