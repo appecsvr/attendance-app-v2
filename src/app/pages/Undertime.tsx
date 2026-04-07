@@ -281,7 +281,7 @@ export function Undertime() {
                 <textarea
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
-                  placeholder="Reason for undertime..."
+                  placeholder="Official reason for undertime..."
                   rows={4}
                   className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
                 />

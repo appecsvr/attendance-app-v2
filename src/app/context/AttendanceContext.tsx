@@ -434,7 +434,7 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
         name: item.name,
         totalLates: item.totalLates,
         totalMinutesLate: item.totalMinutesLate,
-        message: `${item.name} has already reached ${item.totalLates} lates and is due for memo / penalty review.`,
+        message: `${item.name} has already reached ${item.totalLates} lates and is due for memo/penalty review.`,
         isRead: readSet.has(normalizeName(item.name)),
       }))
       .sort((a, b) => b.totalLates - a.totalLates);
