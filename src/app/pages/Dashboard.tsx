@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useAttendance } from "../context/AttendanceContext";
 import DragDropUpload from "../components/layout/DragDropUpload";
 import {
-  Upload,
   FileSpreadsheet,
   Users,
   Clock,
@@ -91,6 +90,16 @@ export function Dashboard() {
     });
   };
 
+  const handleDragDropUpload = (file: File) => {
+    const fakeEvent = {
+      target: {
+        files: [file],
+      },
+    } as React.ChangeEvent<HTMLInputElement>;
+
+    handleFileUpload(fakeEvent);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -134,29 +143,24 @@ export function Dashboard() {
       )}
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div className="xl:col-span-2 bg-white rounded-3xl p-10 border border-slate-200 border-dashed shadow-sm text-center">
-          <div className="flex flex-col items-center justify-center space-y-5">
+        <div className="xl:col-span-2 bg-white rounded-3xl p-10 border border-slate-200 border-dashed shadow-sm">
+          <div className="flex flex-col items-center justify-center space-y-5 text-center">
             <div className="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center">
               <FileSpreadsheet className="w-8 h-8" />
             </div>
 
             <div>
-              <h3 className="text-2xl font-bold text-slate-900">Upload Attendance Data</h3>
+              <h3 className="text-2xl font-bold text-slate-900">
+                Upload Attendance Data
+              </h3>
               <p className="text-sm text-slate-500 max-w-xl mx-auto mt-2">
                 Import daily biometric Excel files. Each upload is saved separately and can also be deleted separately.
               </p>
             </div>
 
-            <label className="cursor-pointer inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-2xl shadow-sm transition-all">
-              <Upload className="w-4 h-4" />
-              Browse Files
-              <input
-                type="file"
-                accept=".xlsx,.xls"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
-            </label>
+            <div className="w-full max-w-2xl">
+              <DragDropUpload onFileSelect={handleDragDropUpload} />
+            </div>
 
             {fileName && (
               <p className="text-sm font-medium text-emerald-600 bg-emerald-50 px-5 py-2 rounded-full border border-emerald-100">
@@ -247,7 +251,8 @@ export function Dashboard() {
                     Uploaded: {new Date(file.uploadedAt).toLocaleString("en-US")}
                   </p>
                   <p className="text-xs text-slate-500 mt-1">
-                    {file.lateRecords.length} late record(s) • {file.generatedUndertimes.length} undertime record(s)
+                    {file.lateRecords.length} late record(s) •{" "}
+                    {file.generatedUndertimes.length} undertime record(s)
                   </p>
                 </div>
 
