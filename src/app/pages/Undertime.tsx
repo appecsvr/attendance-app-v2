@@ -210,7 +210,7 @@ export function Undertime() {
               <div>
                 <h3 className="text-lg font-bold text-slate-900">Add Undertime</h3>
                 <p className="text-sm text-slate-500">
-                  Matching name + date will exclude that late record.
+                  date will exclude that late record.
                 </p>
               </div>
             </div>
