@@ -281,7 +281,7 @@ export function Dashboard() {
               </div>
 
               <div>
-                <h3 className="text-lg font-bold text-amber-900">Memo / Penalty Reminder</h3>
+                <h3 className="text-lg font-bold text-amber-900">Penalty Reminder</h3>
                 <p className="text-sm text-amber-800 mt-1">
                   Employees who reached 4 lates and above are now visible in the notification bell.
                 </p>
