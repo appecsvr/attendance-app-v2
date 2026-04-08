@@ -35,7 +35,6 @@ const MASTER_EMPLOYEES: MasterEmployee[] = [
   { fullName: "Omegan, Jayson" },
   { fullName: "Pascua, Joseph" },
   { fullName: "Peñaflor, Roselle" },
-  // dagdagan mo dito lahat ng permanent employees mo
 ];
 
 function normalizeName(value: string) {
