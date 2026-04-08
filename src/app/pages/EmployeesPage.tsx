@@ -24,6 +24,55 @@ function formatCount(value: number) {
   return value > 0 ? value : "None";
 }
 
+function getInitials(name: string) {
+  const parts = name
+    .replace(/,/g, " ")
+    .split(" ")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  return parts
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+}
+
+function normalizeEmployeePhotoFileName(name: string) {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/\./g, "")
+    .replace(/,/g, "")
+    .replace(/\s+/g, "-");
+}
+
+function getEmployeePhoto(name: string) {
+  const fileName = normalizeEmployeePhotoFileName(name);
+  return `/employees/${fileName}.jpg`;
+}
+
+function EmployeeAvatar({ name }: { name: string }) {
+  const [hasError, setHasError] = useState(false);
+  const photo = getEmployeePhoto(name);
+
+  if (!hasError) {
+    return (
+      <img
+        src={photo}
+        alt={name}
+        onError={() => setHasError(true)}
+        className="h-11 w-11 rounded-full border border-slate-200 object-cover"
+      />
+    );
+  }
+
+  return (
+    <div className="flex h-11 w-11 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-700">
+      {getInitials(name)}
+    </div>
+  );
+}
+
 export default function EmployeesPage() {
   const {
     lateRecords = [],
@@ -101,7 +150,7 @@ export default function EmployeesPage() {
   const filteredEmployees = useMemo(() => {
     const keyword = search.trim().toLowerCase();
 
-    if (!keyword) return [];
+    if (!keyword) return employees;
 
     return employees.filter((emp) =>
       emp.fullName.toLowerCase().includes(keyword)
@@ -165,7 +214,7 @@ export default function EmployeesPage() {
             Employee Search Result
           </h3>
           <p className="mt-1 text-sm text-slate-500">
-            Search an employee to view attendance totals.
+            Employees with attendance records and photo preview
           </p>
         </div>
 
@@ -173,7 +222,7 @@ export default function EmployeesPage() {
           <table className="min-w-full text-sm">
             <thead className="bg-slate-50 text-left text-slate-600">
               <tr>
-                <th className="px-5 py-3 font-semibold">Full Name</th>
+                <th className="px-5 py-3 font-semibold">Employee</th>
                 <th className="px-5 py-3 font-semibold">Late Exemptions</th>
                 <th className="px-5 py-3 font-semibold">Absence Count</th>
                 <th className="px-5 py-3 font-semibold">Lates Count</th>
@@ -182,16 +231,7 @@ export default function EmployeesPage() {
             </thead>
 
             <tbody>
-              {search.trim() === "" ? (
-                <tr>
-                  <td
-                    colSpan={5}
-                    className="px-5 py-14 text-center text-sm text-slate-500"
-                  >
-                    Type an employee name in the search box to view records.
-                  </td>
-                </tr>
-              ) : filteredEmployees.length === 0 ? (
+              {filteredEmployees.length === 0 ? (
                 <tr>
                   <td
                     colSpan={5}
@@ -206,8 +246,18 @@ export default function EmployeesPage() {
                     key={emp.fullName}
                     className="border-t border-slate-100 hover:bg-slate-50"
                   >
-                    <td className="px-5 py-4 font-medium text-slate-800">
-                      {emp.fullName}
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-3">
+                        <EmployeeAvatar name={emp.fullName} />
+                        <div className="min-w-0">
+                          <p className="font-medium text-slate-800">
+                            {emp.fullName}
+                          </p>
+                          <p className="text-xs text-slate-400">
+                            {normalizeEmployeePhotoFileName(emp.fullName)}.jpg
+                          </p>
+                        </div>
+                      </div>
                     </td>
                     <td className="px-5 py-4 text-slate-600">
                       {formatCount(emp.lateExemptionsCount)}
