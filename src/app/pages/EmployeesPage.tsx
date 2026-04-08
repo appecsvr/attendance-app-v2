@@ -1,6 +1,10 @@
 import { useMemo, useState } from "react";
 import { useAttendance } from "../context/AttendanceContext";
 
+type MasterEmployee = {
+  fullName: string;
+};
+
 type EmployeeRow = {
   fullName: string;
   lateExemptionsCount: number;
@@ -8,6 +12,40 @@ type EmployeeRow = {
   latesCount: number;
   totalUndertime: number;
 };
+
+const MASTER_EMPLOYEES: MasterEmployee[] = [
+  { fullName: "Agravio, John Maric" },
+  { fullName: "Bajar, Joseph" },
+  { fullName: "Bautista, Gerry" },
+  { fullName: "Bido, Alonzo" },
+  { fullName: "Caban, Cris" },
+  { fullName: "Campita, Justin" },
+  { fullName: "Cantillon, Ma. Louissa S" },
+  { fullName: "Clemente Jr., Ricardo" },
+  { fullName: "Codilan, Ian Christophe" },
+  { fullName: "Coste, Welmar" },
+  { fullName: "Cruz, Gino" },
+  { fullName: "Cruz, Nathaniel Philip T" },
+  { fullName: "Dometita, Bryan Lloyd" },
+  { fullName: "Engay, Lovely Jane" },
+  { fullName: "Estuaria, Christian" },
+  { fullName: "Francisco, Jhon Mar" },
+  { fullName: "Mapa, Arnel" },
+  { fullName: "Omapas Jr., Teddy" },
+  { fullName: "Omegan, Jayson" },
+  { fullName: "Pascua, Joseph" },
+  { fullName: "Peñaflor, Roselle" },
+  // dagdagan mo dito lahat ng permanent employees mo
+];
+
+function normalizeName(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/\./g, "")
+    .replace(/,/g, "")
+    .replace(/\s+/g, " ");
+}
 
 function formatMinutes(minutes: number) {
   if (!minutes || minutes <= 0) return "None";
@@ -91,8 +129,10 @@ export default function EmployeesPage() {
       const cleanName = name?.trim();
       if (!cleanName) return null;
 
-      if (!map.has(cleanName)) {
-        map.set(cleanName, {
+      const key = normalizeName(cleanName);
+
+      if (!map.has(key)) {
+        map.set(key, {
           fullName: cleanName,
           lateExemptionsCount: 0,
           absenceCount: 0,
@@ -101,8 +141,12 @@ export default function EmployeesPage() {
         });
       }
 
-      return map.get(cleanName)!;
+      return map.get(key)!;
     };
+
+    MASTER_EMPLOYEES.forEach((emp) => {
+      ensureEmployee(emp.fullName);
+    });
 
     lateRecords.forEach((late) => {
       const employee = ensureEmployee(late.name);
@@ -157,13 +201,19 @@ export default function EmployeesPage() {
     );
   }, [employees, search]);
 
+  const withLatesCount = employees.filter((e) => e.latesCount > 0).length;
+  const withAbsencesCount = employees.filter((e) => e.absenceCount > 0).length;
+  const withExemptionsCount = employees.filter(
+    (e) => e.lateExemptionsCount > 0
+  ).length;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Employees</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Search employee records and attendance totals
+            Permanent employee list with attendance-based totals
           </p>
         </div>
 
@@ -182,28 +232,28 @@ export default function EmployeesPage() {
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <p className="text-sm text-slate-500">Total Employees</p>
           <h2 className="mt-2 text-3xl font-bold text-slate-900">
-            {employees.length}
+            {MASTER_EMPLOYEES.length}
           </h2>
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <p className="text-sm text-slate-500">With Lates</p>
           <h2 className="mt-2 text-3xl font-bold text-slate-900">
-            {employees.filter((e) => e.latesCount > 0).length}
+            {withLatesCount}
           </h2>
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <p className="text-sm text-slate-500">With Absences</p>
           <h2 className="mt-2 text-3xl font-bold text-slate-900">
-            {employees.filter((e) => e.absenceCount > 0).length}
+            {withAbsencesCount}
           </h2>
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <p className="text-sm text-slate-500">With Exemptions</p>
           <h2 className="mt-2 text-3xl font-bold text-slate-900">
-            {employees.filter((e) => e.lateExemptionsCount > 0).length}
+            {withExemptionsCount}
           </h2>
         </div>
       </div>
@@ -214,7 +264,8 @@ export default function EmployeesPage() {
             Employee Search Result
           </h3>
           <p className="mt-1 text-sm text-slate-500">
-            Employees with attendance records and photo preview
+            Employee records with counts based on uploaded attendance and menu
+            entries
           </p>
         </div>
 
@@ -243,17 +294,17 @@ export default function EmployeesPage() {
               ) : (
                 filteredEmployees.map((emp) => (
                   <tr
-                    key={emp.fullName}
+                    key={normalizeName(emp.fullName)}
                     className="border-t border-slate-100 hover:bg-slate-50"
                   >
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
                         <EmployeeAvatar name={emp.fullName} />
-<div className="min-w-0">
-  <p className="font-medium text-slate-800">
-    {emp.fullName}
-  </p>
-</div>
+                        <div className="min-w-0">
+                          <p className="font-medium text-slate-800">
+                            {emp.fullName}
+                          </p>
+                        </div>
                       </div>
                     </td>
                     <td className="px-5 py-4 text-slate-600">
