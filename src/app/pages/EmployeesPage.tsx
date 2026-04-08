@@ -249,14 +249,11 @@ export default function EmployeesPage() {
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
                         <EmployeeAvatar name={emp.fullName} />
-                        <div className="min-w-0">
-                          <p className="font-medium text-slate-800">
-                            {emp.fullName}
-                          </p>
-                          <p className="text-xs text-slate-400">
-                            {normalizeEmployeePhotoFileName(emp.fullName)}.jpg
-                          </p>
-                        </div>
+<div className="min-w-0">
+  <p className="font-medium text-slate-800">
+    {emp.fullName}
+  </p>
+</div>
                       </div>
                     </td>
                     <td className="px-5 py-4 text-slate-600">
