@@ -69,8 +69,8 @@ export function Dashboard() {
     selectedMonthScope,
     selectedDayScope,
     exportFilteredWorkbook,
-    exportSystemBackup,
-    importSystemBackup,
+    exportSystemBackupWorkbook,
+    importSystemBackupWorkbook,
   } = useAttendance();
 
   const importBackupInputRef = useRef<HTMLInputElement | null>(null);
@@ -98,7 +98,7 @@ export function Dashboard() {
   };
 
   const handleBackupExport = () => {
-    const result = exportSystemBackup();
+    const result = exportSystemBackupWorkbook();
     setFeedback({
       type: result.success ? "success" : "error",
       message: result.message,
@@ -116,7 +116,7 @@ export function Dashboard() {
     if (!file) return;
 
     const confirmed = window.confirm(
-      "Importing a backup will replace the current saved attendance data. Continue?"
+      "Importing a backup workbook will replace the current saved attendance data. Continue?"
     );
 
     if (!confirmed) {
@@ -124,7 +124,7 @@ export function Dashboard() {
       return;
     }
 
-    const result = await importSystemBackup(file);
+    const result = await importSystemBackupWorkbook(file);
 
     setFeedback({
       type: result.success ? "success" : "error",
@@ -261,7 +261,8 @@ export function Dashboard() {
               <div>
                 <h3 className="text-lg font-bold text-slate-900">Backup / Restore</h3>
                 <p className="text-sm text-slate-500">
-                  Save your attendance data to JSON and restore it anytime.
+                  Save your attendance data to an Excel backup workbook and restore
+                  it anytime.
                 </p>
               </div>
             </div>
@@ -272,7 +273,7 @@ export function Dashboard() {
                 className="w-full inline-flex items-center justify-center gap-2 rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm font-semibold text-indigo-700 hover:bg-indigo-100"
               >
                 <Download className="w-4 h-4" />
-                Export Backup
+                Export Backup Workbook
               </button>
 
               <button
@@ -280,23 +281,24 @@ export function Dashboard() {
                 className="w-full inline-flex items-center justify-center gap-2 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700 hover:bg-blue-100"
               >
                 <Upload className="w-4 h-4" />
-                Import Backup
+                Import Backup Workbook
               </button>
 
               <input
                 ref={importBackupInputRef}
                 type="file"
-                accept=".json,application/json"
+                accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
                 className="hidden"
                 onChange={handleBackupImportChange}
               />
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-              <p className="font-semibold text-slate-900">What is included</p>
+              <p className="font-semibold text-slate-900">Included in the backup</p>
               <p className="mt-1">
-                Uploaded files, exemptions, absences, manual undertime, memo read
-                status, and current scope filters.
+                Uploaded files, late records, generated undertime, exemptions,
+                absences, manual undertime, memo read status, and current scope
+                filters.
               </p>
             </div>
           </div>
