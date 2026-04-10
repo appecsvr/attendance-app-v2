@@ -17,7 +17,7 @@ const MASTER_EMPLOYEES: MasterEmployee[] = [
   { fullName: "Agravio, John Maric" },
   { fullName: "Aquino, Armando" },
   { fullName: "Cantillon, Ma. Louissa" },
-  { fullName: "Codilan, Ian Christohper" },
+  { fullName: "Codilan, Ian Christopher" },
   { fullName: "Cruz, Gino" },
   { fullName: "Cruz, Nathaniel Philip" },
   { fullName: "Engay, Lovely Jane" }, 
