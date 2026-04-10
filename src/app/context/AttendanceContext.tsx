@@ -7,6 +7,7 @@ import React, {
   type ReactNode,
 } from "react";
 import * as XLSX from "xlsx";
+import { downloadBackupFile, readBackupFile, type BackupPayload } from "../utils/backup";
 
 export interface LateRecord {
   id: string;
@@ -125,6 +126,8 @@ interface AttendanceState {
   restoreManualUndertime: (id: string) => void;
   markAllMemoAlertsAsRead: () => void;
   exportFilteredWorkbook: () => { success: boolean; message: string };
+  exportSystemBackup: () => { success: boolean; message: string };
+  importSystemBackup: (file: File) => Promise<{ success: boolean; message: string }>;
 }
 
 const AttendanceContext = createContext<AttendanceState | undefined>(undefined);
@@ -921,6 +924,84 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const exportSystemBackup = () => {
+    try {
+      const payload: BackupPayload = {
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        data: {
+          fileName,
+          uploadedFiles,
+          exemptions: exemptionsState,
+          absences: absencesState,
+          manualUndertimes: manualUndertimesState,
+          readMemoEmployeeNames,
+          selectedMonthScope,
+          selectedDayScope,
+        },
+      };
+
+      downloadBackupFile(payload);
+
+      return {
+        success: true,
+        message: "Backup exported successfully.",
+      };
+    } catch (error) {
+      console.error("Backup export failed:", error);
+      return {
+        success: false,
+        message: "Backup export failed. Please try again.",
+      };
+    }
+  };
+
+  const importSystemBackup = async (file: File) => {
+    try {
+      const backup = await readBackupFile(file);
+      const restored = backup.data as Partial<PersistedAttendanceData>;
+
+      const safeData: PersistedAttendanceData = {
+        fileName: typeof restored.fileName === "string" ? restored.fileName : "",
+        uploadedFiles: Array.isArray(restored.uploadedFiles) ? restored.uploadedFiles : [],
+        exemptions: Array.isArray(restored.exemptions) ? restored.exemptions : [],
+        absences: Array.isArray(restored.absences) ? restored.absences : [],
+        manualUndertimes: Array.isArray(restored.manualUndertimes)
+          ? restored.manualUndertimes
+          : [],
+        readMemoEmployeeNames: Array.isArray(restored.readMemoEmployeeNames)
+          ? restored.readMemoEmployeeNames
+          : [],
+        selectedMonthScope:
+          typeof restored.selectedMonthScope === "string"
+            ? restored.selectedMonthScope
+            : "all",
+        selectedDayScope:
+          typeof restored.selectedDayScope === "string" ? restored.selectedDayScope : "all",
+      };
+
+      setFileName(safeData.fileName);
+      setUploadedFiles(safeData.uploadedFiles);
+      setExemptions(safeData.exemptions);
+      setAbsences(safeData.absences);
+      setManualUndertimes(safeData.manualUndertimes);
+      setReadMemoEmployeeNames(safeData.readMemoEmployeeNames);
+      setSelectedMonthScope(safeData.selectedMonthScope || "all");
+      setSelectedDayScope(safeData.selectedDayScope || "all");
+
+      return {
+        success: true,
+        message: "Backup restored successfully.",
+      };
+    } catch (error) {
+      console.error("Backup import failed:", error);
+      return {
+        success: false,
+        message: "Backup import failed. Please check the file format.",
+      };
+    }
+  };
+
   return (
     <AttendanceContext.Provider
       value={{
@@ -953,6 +1034,8 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
         restoreManualUndertime,
         markAllMemoAlertsAsRead,
         exportFilteredWorkbook,
+        exportSystemBackup,
+        importSystemBackup,
       }}
     >
       {children}

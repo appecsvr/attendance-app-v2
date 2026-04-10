@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useAttendance } from "../context/AttendanceContext";
 import DragDropUpload from "../components/layout/DragDropUpload";
 import {
@@ -15,6 +15,9 @@ import {
   CalendarRange,
   CheckCircle2,
   AlertCircle,
+  Download,
+  Upload,
+  Database,
 } from "lucide-react";
 import {
   LineChart,
@@ -66,7 +69,11 @@ export function Dashboard() {
     selectedMonthScope,
     selectedDayScope,
     exportFilteredWorkbook,
+    exportSystemBackup,
+    importSystemBackup,
   } = useAttendance();
+
+  const importBackupInputRef = useRef<HTMLInputElement | null>(null);
 
   const [feedback, setFeedback] = useState<{
     type: "success" | "error";
@@ -88,6 +95,43 @@ export function Dashboard() {
       type: result.success ? "success" : "error",
       message: result.message,
     });
+  };
+
+  const handleBackupExport = () => {
+    const result = exportSystemBackup();
+    setFeedback({
+      type: result.success ? "success" : "error",
+      message: result.message,
+    });
+  };
+
+  const handleBackupImportClick = () => {
+    importBackupInputRef.current?.click();
+  };
+
+  const handleBackupImportChange = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const confirmed = window.confirm(
+      "Importing a backup will replace the current saved attendance data. Continue?"
+    );
+
+    if (!confirmed) {
+      e.target.value = "";
+      return;
+    }
+
+    const result = await importSystemBackup(file);
+
+    setFeedback({
+      type: result.success ? "success" : "error",
+      message: result.message,
+    });
+
+    e.target.value = "";
   };
 
   const handleDragDropUpload = (file: File) => {
@@ -178,33 +222,83 @@ export function Dashboard() {
           </div>
         </div>
 
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-slate-100 text-slate-700 flex items-center justify-center">
-              <FileSpreadsheet className="w-5 h-5" />
+        <div className="space-y-6">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-slate-100 text-slate-700 flex items-center justify-center">
+                <FileSpreadsheet className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Reports</h3>
+                <p className="text-sm text-slate-500">
+                  Export the current report scope to Excel.
+                </p>
+              </div>
             </div>
-            <div>
-              <h3 className="text-lg font-bold text-slate-900">Reports</h3>
-              <p className="text-sm text-slate-500">
-                Export the current report scope to Excel.
+
+            <button
+              onClick={handleExcelExport}
+              className="w-full inline-flex items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 hover:bg-emerald-100"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              Export Excel Report
+            </button>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+              <p className="font-semibold text-slate-900">Current export scope</p>
+              <p className="mt-1">
+                The Excel export follows your selected report scope:
+                <span className="font-semibold"> {filterLabel}</span>
               </p>
             </div>
           </div>
 
-          <button
-            onClick={handleExcelExport}
-            className="w-full inline-flex items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 hover:bg-emerald-100"
-          >
-            <FileSpreadsheet className="w-4 h-4" />
-            Export Excel Report
-          </button>
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-indigo-100 text-indigo-700 flex items-center justify-center">
+                <Database className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Backup / Restore</h3>
+                <p className="text-sm text-slate-500">
+                  Save your attendance data to JSON and restore it anytime.
+                </p>
+              </div>
+            </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-            <p className="font-semibold text-slate-900">Current export scope</p>
-            <p className="mt-1">
-              The Excel export follows your selected report scope:
-              <span className="font-semibold"> {filterLabel}</span>
-            </p>
+            <div className="grid grid-cols-1 gap-3">
+              <button
+                onClick={handleBackupExport}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm font-semibold text-indigo-700 hover:bg-indigo-100"
+              >
+                <Download className="w-4 h-4" />
+                Export Backup
+              </button>
+
+              <button
+                onClick={handleBackupImportClick}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700 hover:bg-blue-100"
+              >
+                <Upload className="w-4 h-4" />
+                Import Backup
+              </button>
+
+              <input
+                ref={importBackupInputRef}
+                type="file"
+                accept=".json,application/json"
+                className="hidden"
+                onChange={handleBackupImportChange}
+              />
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+              <p className="font-semibold text-slate-900">What is included</p>
+              <p className="mt-1">
+                Uploaded files, exemptions, absences, manual undertime, memo read
+                status, and current scope filters.
+              </p>
+            </div>
           </div>
         </div>
       </div>
