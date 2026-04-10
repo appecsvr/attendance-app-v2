@@ -7,7 +7,6 @@ import React, {
   type ReactNode,
 } from "react";
 import * as XLSX from "xlsx";
-import { downloadBackupFile, readBackupFile, type BackupPayload } from "../utils/backup";
 
 export interface LateRecord {
   id: string;
@@ -126,9 +125,70 @@ interface AttendanceState {
   restoreManualUndertime: (id: string) => void;
   markAllMemoAlertsAsRead: () => void;
   exportFilteredWorkbook: () => { success: boolean; message: string };
-  exportSystemBackup: () => { success: boolean; message: string };
-  importSystemBackup: (file: File) => Promise<{ success: boolean; message: string }>;
+  exportSystemBackupWorkbook: () => { success: boolean; message: string };
+  importSystemBackupWorkbook: (
+    file: File
+  ) => Promise<{ success: boolean; message: string }>;
 }
+
+type WorkbookMetaRow = {
+  Key: string;
+  Value: string | number;
+};
+
+type WorkbookUploadedFileRow = {
+  id: string | number;
+  fileName: string;
+  uploadedAt: string;
+};
+
+type WorkbookLateRecordRow = {
+  id: string | number;
+  name: string;
+  date: string;
+  timeIn: string;
+  minutesLate: string | number;
+  secondsLate: string | number;
+  totalSecondsLate: string | number;
+  sourceFileId: string | number;
+  sourceFileName: string;
+};
+
+type WorkbookGeneratedUndertimeRow = {
+  id: string | number;
+  name: string;
+  date: string;
+  timeIn: string;
+  sourceFileId: string | number;
+  sourceFileName: string;
+};
+
+type WorkbookExemptionRow = {
+  id: string | number;
+  name: string;
+  reason: string;
+  date: string;
+  minutesLate: string | number;
+};
+
+type WorkbookAbsenceRow = {
+  id: string | number;
+  name: string;
+  reason: string;
+  date: string;
+};
+
+type WorkbookManualUndertimeRow = {
+  id: string | number;
+  name: string;
+  reason: string;
+  date: string;
+  undertimeHours: string;
+};
+
+type WorkbookMemoReadRow = {
+  name: string;
+};
 
 const AttendanceContext = createContext<AttendanceState | undefined>(undefined);
 
@@ -235,6 +295,16 @@ function matchesCurrentScope(
   return true;
 }
 
+function safeArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : [];
+}
+
+function parseWorkbookSheet<T>(workbook: XLSX.WorkBook, sheetName: string): T[] {
+  const worksheet = workbook.Sheets[sheetName];
+  if (!worksheet) return [];
+  return XLSX.utils.sheet_to_json<T>(worksheet, { defval: "" });
+}
+
 export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
   const initialData = getStoredData();
 
@@ -242,11 +312,15 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedAttendanceFile[]>(
     initialData.uploadedFiles
   );
-  const [exemptionsState, setExemptions] = useState<Exemption[]>(initialData.exemptions);
-  const [absencesState, setAbsences] = useState<AbsentRecord[]>(initialData.absences);
-  const [manualUndertimesState, setManualUndertimes] = useState<UndertimeRecord[]>(
-    initialData.manualUndertimes
+  const [exemptionsState, setExemptions] = useState<Exemption[]>(
+    initialData.exemptions
   );
+  const [absencesState, setAbsences] = useState<AbsentRecord[]>(
+    initialData.absences
+  );
+  const [manualUndertimesState, setManualUndertimes] = useState<
+    UndertimeRecord[]
+  >(initialData.manualUndertimes);
   const [readMemoEmployeeNames, setReadMemoEmployeeNames] = useState<string[]>(
     initialData.readMemoEmployeeNames
   );
@@ -300,7 +374,9 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
 
     uploadedFiles.forEach((file) => {
       file.lateRecords.forEach((record) => daySet.add(normalizeDate(record.date)));
-      file.generatedUndertimes.forEach((record) => daySet.add(normalizeDate(record.date)));
+      file.generatedUndertimes.forEach((record) =>
+        daySet.add(normalizeDate(record.date))
+      );
     });
 
     return Array.from(daySet).sort(
@@ -329,7 +405,10 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
   }, [uploadedAvailableDates, selectedMonthScope]);
 
   useEffect(() => {
-    if (selectedMonthScope !== "all" && !uploadedAvailableMonths.includes(selectedMonthScope)) {
+    if (
+      selectedMonthScope !== "all" &&
+      !uploadedAvailableMonths.includes(selectedMonthScope)
+    ) {
       setSelectedMonthScope("all");
     }
   }, [selectedMonthScope, uploadedAvailableMonths]);
@@ -478,14 +557,15 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
 
         workbook.SheetNames.forEach((sheetName) => {
           const worksheet = workbook.Sheets[sheetName];
-          const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+          const jsonData: unknown[] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
           for (let i = 4; i < jsonData.length; i += 1) {
-            const row = jsonData[i];
+            const row = jsonData[i] as unknown[];
+
             if (!row?.[2] || !row?.[4]) continue;
 
             const name = String(row[2]).trim();
-            const dateTime = new Date(row[4]);
+            const dateTime = new Date(row[4] as string | number | Date);
 
             if (!name || Number.isNaN(dateTime.getTime())) continue;
 
@@ -746,14 +826,18 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
       if (fileToDelete) {
         const deletedDates = new Set<string>();
 
-        fileToDelete.lateRecords.forEach((record) => deletedDates.add(normalizeDate(record.date)));
+        fileToDelete.lateRecords.forEach((record) =>
+          deletedDates.add(normalizeDate(record.date))
+        );
         fileToDelete.generatedUndertimes.forEach((record) =>
           deletedDates.add(normalizeDate(record.date))
         );
 
         const remainingDates = new Set<string>();
         updatedFiles.forEach((file) => {
-          file.lateRecords.forEach((record) => remainingDates.add(normalizeDate(record.date)));
+          file.lateRecords.forEach((record) =>
+            remainingDates.add(normalizeDate(record.date))
+          );
           file.generatedUndertimes.forEach((record) =>
             remainingDates.add(normalizeDate(record.date))
           );
@@ -819,7 +903,9 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
 
   const markAllMemoAlertsAsRead = () => {
     const uniqueNames = Array.from(new Set(memoAlerts.map((item) => item.name.trim())));
-    setReadMemoEmployeeNames((prev) => Array.from(new Set([...prev, ...uniqueNames])));
+    setReadMemoEmployeeNames((prev) =>
+      Array.from(new Set([...prev, ...uniqueNames]))
+    );
   };
 
   const exportFilteredWorkbook = () => {
@@ -879,7 +965,9 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
       );
       XLSX.utils.book_append_sheet(
         workbook,
-        XLSX.utils.json_to_sheet(exemptionRows.length ? exemptionRows : [{ Message: "No data" }]),
+        XLSX.utils.json_to_sheet(
+          exemptionRows.length ? exemptionRows : [{ Message: "No data" }]
+        ),
         "Exemptions"
       );
       XLSX.utils.book_append_sheet(
@@ -890,7 +978,9 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
       XLSX.utils.book_append_sheet(
         workbook,
         XLSX.utils.json_to_sheet(
-          generatedUndertimeRows.length ? generatedUndertimeRows : [{ Message: "No data" }]
+          generatedUndertimeRows.length
+            ? generatedUndertimeRows
+            : [{ Message: "No data" }]
         ),
         "System Undertime"
       );
@@ -904,9 +994,13 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
 
       const suffix =
         selectedDayScope !== "all"
-          ? formatDayLabel(selectedDayScope).replace(/[^\w\s-]/g, "").replace(/\s+/g, "-")
+          ? formatDayLabel(selectedDayScope)
+              .replace(/[^\w\s-]/g, "")
+              .replace(/\s+/g, "-")
           : selectedMonthScope !== "all"
-          ? formatMonthLabel(selectedMonthScope).replace(/[^\w\s-]/g, "").replace(/\s+/g, "-")
+          ? formatMonthLabel(selectedMonthScope)
+              .replace(/[^\w\s-]/g, "")
+              .replace(/\s+/g, "-")
           : "all-records";
 
       XLSX.writeFile(workbook, `attendance-report-${suffix}.xlsx`);
@@ -924,80 +1018,383 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const exportSystemBackup = () => {
+  const exportSystemBackupWorkbook = () => {
     try {
-      const payload: BackupPayload = {
-        version: 1,
-        exportedAt: new Date().toISOString(),
-        data: {
-          fileName,
-          uploadedFiles,
-          exemptions: exemptionsState,
-          absences: absencesState,
-          manualUndertimes: manualUndertimesState,
-          readMemoEmployeeNames,
-          selectedMonthScope,
-          selectedDayScope,
-        },
-      };
+      const workbook = XLSX.utils.book_new();
 
-      downloadBackupFile(payload);
+      const metaRows = [
+        { Key: "version", Value: 1 },
+        { Key: "exportedAt", Value: new Date().toISOString() },
+        { Key: "fileName", Value: fileName },
+        { Key: "selectedMonthScope", Value: selectedMonthScope },
+        { Key: "selectedDayScope", Value: selectedDayScope },
+      ];
+
+      const uploadedFilesRows = uploadedFiles.map((file) => ({
+        id: file.id,
+        fileName: file.fileName,
+        uploadedAt: file.uploadedAt,
+      }));
+
+      const lateRecordsRows = uploadedFiles.flatMap((file) =>
+        file.lateRecords.map((record) => ({
+          id: record.id,
+          name: record.name,
+          date: record.date,
+          timeIn: record.timeIn,
+          minutesLate: record.minutesLate,
+          secondsLate: record.secondsLate,
+          totalSecondsLate: record.totalSecondsLate,
+          sourceFileId: record.sourceFileId,
+          sourceFileName: record.sourceFileName,
+        }))
+      );
+
+      const generatedUndertimesRows = uploadedFiles.flatMap((file) =>
+        file.generatedUndertimes.map((record) => ({
+          id: record.id,
+          name: record.name,
+          date: record.date,
+          timeIn: record.timeIn,
+          sourceFileId: record.sourceFileId,
+          sourceFileName: record.sourceFileName,
+        }))
+      );
+
+      const exemptionsRows = exemptionsState.map((item) => ({
+        id: item.id,
+        name: item.name,
+        reason: item.reason,
+        date: item.date,
+        minutesLate: item.minutesLate ?? "",
+      }));
+
+      const absencesRows = absencesState.map((item) => ({
+        id: item.id,
+        name: item.name,
+        reason: item.reason,
+        date: item.date,
+      }));
+
+      const manualUndertimesRows = manualUndertimesState.map((item) => ({
+        id: item.id,
+        name: item.name,
+        reason: item.reason,
+        date: item.date,
+        undertimeHours: item.undertimeHours,
+      }));
+
+      const memoReadRows = readMemoEmployeeNames.map((name) => ({
+        name,
+      }));
+
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.json_to_sheet(metaRows),
+        "System_Meta"
+      );
+
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.json_to_sheet(
+          uploadedFilesRows.length
+            ? uploadedFilesRows
+            : [{ id: "", fileName: "", uploadedAt: "" }]
+        ),
+        "Uploaded_Files"
+      );
+
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.json_to_sheet(
+          lateRecordsRows.length
+            ? lateRecordsRows
+            : [
+                {
+                  id: "",
+                  name: "",
+                  date: "",
+                  timeIn: "",
+                  minutesLate: "",
+                  secondsLate: "",
+                  totalSecondsLate: "",
+                  sourceFileId: "",
+                  sourceFileName: "",
+                },
+              ]
+        ),
+        "Late_Records"
+      );
+
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.json_to_sheet(
+          generatedUndertimesRows.length
+            ? generatedUndertimesRows
+            : [
+                {
+                  id: "",
+                  name: "",
+                  date: "",
+                  timeIn: "",
+                  sourceFileId: "",
+                  sourceFileName: "",
+                },
+              ]
+        ),
+        "Generated_Undertime"
+      );
+
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.json_to_sheet(
+          exemptionsRows.length
+            ? exemptionsRows
+            : [{ id: "", name: "", reason: "", date: "", minutesLate: "" }]
+        ),
+        "Exemptions"
+      );
+
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.json_to_sheet(
+          absencesRows.length
+            ? absencesRows
+            : [{ id: "", name: "", reason: "", date: "" }]
+        ),
+        "Absences"
+      );
+
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.json_to_sheet(
+          manualUndertimesRows.length
+            ? manualUndertimesRows
+            : [{ id: "", name: "", reason: "", date: "", undertimeHours: "" }]
+        ),
+        "Manual_Undertime"
+      );
+
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.json_to_sheet(memoReadRows.length ? memoReadRows : [{ name: "" }]),
+        "Memo_Read_Status"
+      );
+
+      XLSX.writeFile(
+        workbook,
+        `attendance-system-backup-${new Date()
+          .toISOString()
+          .slice(0, 19)
+          .replace(/[:T]/g, "-")}.xlsx`
+      );
 
       return {
         success: true,
-        message: "Backup exported successfully.",
+        message: "Backup workbook exported successfully.",
       };
     } catch (error) {
-      console.error("Backup export failed:", error);
+      console.error("Backup workbook export failed:", error);
       return {
         success: false,
-        message: "Backup export failed. Please try again.",
+        message: "Backup workbook export failed. Please try again.",
       };
     }
   };
 
-  const importSystemBackup = async (file: File) => {
+  const importSystemBackupWorkbook = async (file: File) => {
     try {
-      const backup = await readBackupFile(file);
-      const restored = backup.data as Partial<PersistedAttendanceData>;
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: "array" });
 
-      const safeData: PersistedAttendanceData = {
-        fileName: typeof restored.fileName === "string" ? restored.fileName : "",
-        uploadedFiles: Array.isArray(restored.uploadedFiles) ? restored.uploadedFiles : [],
-        exemptions: Array.isArray(restored.exemptions) ? restored.exemptions : [],
-        absences: Array.isArray(restored.absences) ? restored.absences : [],
-        manualUndertimes: Array.isArray(restored.manualUndertimes)
-          ? restored.manualUndertimes
-          : [],
-        readMemoEmployeeNames: Array.isArray(restored.readMemoEmployeeNames)
-          ? restored.readMemoEmployeeNames
-          : [],
-        selectedMonthScope:
-          typeof restored.selectedMonthScope === "string"
-            ? restored.selectedMonthScope
-            : "all",
-        selectedDayScope:
-          typeof restored.selectedDayScope === "string" ? restored.selectedDayScope : "all",
-      };
+      const sheetNames = workbook.SheetNames;
+      const requiredSheets = [
+        "System_Meta",
+        "Uploaded_Files",
+        "Late_Records",
+        "Generated_Undertime",
+        "Exemptions",
+        "Absences",
+        "Manual_Undertime",
+        "Memo_Read_Status",
+      ];
 
-      setFileName(safeData.fileName);
-      setUploadedFiles(safeData.uploadedFiles);
-      setExemptions(safeData.exemptions);
-      setAbsences(safeData.absences);
-      setManualUndertimes(safeData.manualUndertimes);
-      setReadMemoEmployeeNames(safeData.readMemoEmployeeNames);
-      setSelectedMonthScope(safeData.selectedMonthScope || "all");
-      setSelectedDayScope(safeData.selectedDayScope || "all");
+      const missingSheets = requiredSheets.filter((sheet) => !sheetNames.includes(sheet));
+
+      if (missingSheets.length > 0) {
+        return {
+          success: false,
+          message: `Invalid backup workbook. Missing sheet(s): ${missingSheets.join(", ")}`,
+        };
+      }
+
+      const metaRows = parseWorkbookSheet<WorkbookMetaRow>(workbook, "System_Meta");
+      const uploadedFilesRows = parseWorkbookSheet<WorkbookUploadedFileRow>(
+        workbook,
+        "Uploaded_Files"
+      );
+      const lateRecordsRows = parseWorkbookSheet<WorkbookLateRecordRow>(
+        workbook,
+        "Late_Records"
+      );
+      const generatedUndertimesRows = parseWorkbookSheet<WorkbookGeneratedUndertimeRow>(
+        workbook,
+        "Generated_Undertime"
+      );
+      const exemptionsRows = parseWorkbookSheet<WorkbookExemptionRow>(
+        workbook,
+        "Exemptions"
+      );
+      const absencesRows = parseWorkbookSheet<WorkbookAbsenceRow>(workbook, "Absences");
+      const manualUndertimesRows = parseWorkbookSheet<WorkbookManualUndertimeRow>(
+        workbook,
+        "Manual_Undertime"
+      );
+      const memoReadRows = parseWorkbookSheet<WorkbookMemoReadRow>(
+        workbook,
+        "Memo_Read_Status"
+      );
+
+      const metaMap = new Map<string, string>();
+      metaRows.forEach((row) => {
+        metaMap.set(String(row.Key), String(row.Value ?? ""));
+      });
+
+      const uploadedFilesMap = new Map<string, UploadedAttendanceFile>();
+
+      safeArray<WorkbookUploadedFileRow>(uploadedFilesRows)
+        .filter((row: WorkbookUploadedFileRow) => row.id && row.fileName)
+        .forEach((row: WorkbookUploadedFileRow) => {
+          uploadedFilesMap.set(String(row.id), {
+            id: String(row.id),
+            fileName: String(row.fileName),
+            uploadedAt: String(row.uploadedAt || new Date().toISOString()),
+            lateRecords: [],
+            generatedUndertimes: [],
+          });
+        });
+
+      safeArray<WorkbookLateRecordRow>(lateRecordsRows)
+        .filter(
+          (row: WorkbookLateRecordRow) =>
+            row.id && row.name && row.date && row.timeIn && row.sourceFileId
+        )
+        .forEach((row: WorkbookLateRecordRow) => {
+          const targetFile = uploadedFilesMap.get(String(row.sourceFileId));
+          if (!targetFile) return;
+
+          targetFile.lateRecords.push({
+            id: String(row.id),
+            name: String(row.name),
+            date: String(row.date),
+            timeIn: String(row.timeIn),
+            minutesLate: Number(row.minutesLate || 0),
+            secondsLate: Number(row.secondsLate || 0),
+            totalSecondsLate: Number(row.totalSecondsLate || 0),
+            sourceFileId: String(row.sourceFileId),
+            sourceFileName: String(row.sourceFileName || targetFile.fileName),
+          });
+        });
+
+      safeArray<WorkbookGeneratedUndertimeRow>(generatedUndertimesRows)
+        .filter(
+          (row: WorkbookGeneratedUndertimeRow) =>
+            row.id && row.name && row.date && row.timeIn && row.sourceFileId
+        )
+        .forEach((row: WorkbookGeneratedUndertimeRow) => {
+          const targetFile = uploadedFilesMap.get(String(row.sourceFileId));
+          if (!targetFile) return;
+
+          targetFile.generatedUndertimes.push({
+            id: String(row.id),
+            name: String(row.name),
+            date: String(row.date),
+            timeIn: String(row.timeIn),
+            sourceFileId: String(row.sourceFileId),
+            sourceFileName: String(row.sourceFileName || targetFile.fileName),
+          });
+        });
+
+      const rebuiltUploadedFiles = Array.from(uploadedFilesMap.values()).sort((a, b) => {
+        return new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime();
+      });
+
+      rebuiltUploadedFiles.forEach((fileItem) => {
+        fileItem.lateRecords.sort((a, b) => {
+          const aDate = new Date(`${a.date} ${a.timeIn}`).getTime();
+          const bDate = new Date(`${b.date} ${b.timeIn}`).getTime();
+          return bDate - aDate;
+        });
+
+        fileItem.generatedUndertimes.sort((a, b) => {
+          const aDate = new Date(`${a.date} ${a.timeIn}`).getTime();
+          const bDate = new Date(`${b.date} ${b.timeIn}`).getTime();
+          return bDate - aDate;
+        });
+      });
+
+      const restoredExemptions: Exemption[] = safeArray<WorkbookExemptionRow>(exemptionsRows)
+        .filter((row: WorkbookExemptionRow) => row.id && row.name && row.date)
+        .map((row: WorkbookExemptionRow) => ({
+          id: String(row.id),
+          name: String(row.name),
+          reason: String(row.reason || ""),
+          date: String(row.date),
+          minutesLate:
+            row.minutesLate === "" || row.minutesLate === undefined
+              ? undefined
+              : Number(row.minutesLate),
+        }));
+
+      const restoredAbsences: AbsentRecord[] = safeArray<WorkbookAbsenceRow>(absencesRows)
+        .filter((row: WorkbookAbsenceRow) => row.id && row.name && row.date)
+        .map((row: WorkbookAbsenceRow) => ({
+          id: String(row.id),
+          name: String(row.name),
+          reason: String(row.reason || ""),
+          date: String(row.date),
+        }));
+
+      const restoredManualUndertimes: UndertimeRecord[] = safeArray<WorkbookManualUndertimeRow>(
+        manualUndertimesRows
+      )
+        .filter((row: WorkbookManualUndertimeRow) => row.id && row.name && row.date)
+        .map((row: WorkbookManualUndertimeRow) => ({
+          id: String(row.id),
+          name: String(row.name),
+          reason: String(row.reason || ""),
+          date: String(row.date),
+          undertimeHours: String(row.undertimeHours || ""),
+        }));
+
+      const restoredMemoReadNames: string[] = safeArray<WorkbookMemoReadRow>(memoReadRows)
+        .map((row: WorkbookMemoReadRow) => String(row.name || "").trim())
+        .filter(Boolean);
+
+      const restoredFileName =
+        metaMap.get("fileName") || rebuiltUploadedFiles[0]?.fileName || "";
+
+      const restoredSelectedMonthScope = metaMap.get("selectedMonthScope") || "all";
+      const restoredSelectedDayScope = metaMap.get("selectedDayScope") || "all";
+
+      setFileName(restoredFileName);
+      setUploadedFiles(rebuiltUploadedFiles);
+      setExemptions(restoredExemptions);
+      setAbsences(restoredAbsences);
+      setManualUndertimes(restoredManualUndertimes);
+      setReadMemoEmployeeNames(restoredMemoReadNames);
+      setSelectedMonthScope(restoredSelectedMonthScope);
+      setSelectedDayScope(restoredSelectedDayScope);
 
       return {
         success: true,
-        message: "Backup restored successfully.",
+        message: "Backup workbook restored successfully.",
       };
     } catch (error) {
-      console.error("Backup import failed:", error);
+      console.error("Backup workbook import failed:", error);
       return {
         success: false,
-        message: "Backup import failed. Please check the file format.",
+        message: "Backup workbook import failed. Please check the Excel file format.",
       };
     }
   };
@@ -1034,8 +1431,8 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
         restoreManualUndertime,
         markAllMemoAlertsAsRead,
         exportFilteredWorkbook,
-        exportSystemBackup,
-        importSystemBackup,
+        exportSystemBackupWorkbook,
+        importSystemBackupWorkbook,
       }}
     >
       {children}
