@@ -53,7 +53,7 @@ const MASTER_EMPLOYEES: MasterEmployee[] = [
   { fullName: "Meeks, Bryan" }, 
   { fullName: "Obligar, Bernal" }, 
   { fullName: "Olesco, Alvin" }, 
-  { fullName: "Omampas Jr., Teddy" },    
+  { fullName: "Omapas Jr., Teddy" },    
   { fullName: "Omegan, Jayson" },
   { fullName: "Radaza, Marifie" },
   { fullName: "Samson, John Paul" },
