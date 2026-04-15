@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useAttendance } from "../context/AttendanceContext";
 import DragDropUpload from "../components/layout/DragDropUpload";
 import {
+  FileSpreadsheet,
   Users,
   Clock,
   Timer,
@@ -14,7 +15,6 @@ import {
   CalendarRange,
   CheckCircle2,
   AlertCircle,
-  FileSpreadsheet,
 } from "lucide-react";
 import {
   LineChart,
@@ -65,6 +65,7 @@ export function Dashboard() {
     clearAllAttendanceHistory,
     selectedMonthScope,
     selectedDayScope,
+    exportFilteredWorkbook,
   } = useAttendance();
 
   const [feedback, setFeedback] = useState<{
@@ -80,6 +81,14 @@ export function Dashboard() {
       : selectedMonthScope !== "all"
       ? formatMonthLabel(selectedMonthScope)
       : "All Records";
+
+  const handleExcelExport = () => {
+    const result = exportFilteredWorkbook();
+    setFeedback({
+      type: result.success ? "success" : "error",
+      message: result.message,
+    });
+  };
 
   const handleDragDropUpload = (file: File) => {
     const dataTransfer = new DataTransfer();
@@ -140,8 +149,8 @@ export function Dashboard() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-6">
-        <div className="bg-white rounded-3xl p-10 border border-slate-200 border-dashed shadow-sm">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className="xl:col-span-2 bg-white rounded-3xl p-10 border border-slate-200 border-dashed shadow-sm">
           <div className="flex flex-col items-center justify-center space-y-5 text-center">
             <div className="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center">
               <FileSpreadsheet className="w-8 h-8" />
@@ -166,6 +175,38 @@ export function Dashboard() {
                 {fileName} loaded successfully
               </p>
             )}
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-slate-100 text-slate-700 flex items-center justify-center">
+                <FileSpreadsheet className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Reports</h3>
+                <p className="text-sm text-slate-500">
+                  Export the current report scope to Excel.
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={handleExcelExport}
+              className="w-full inline-flex items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 hover:bg-emerald-100"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              Export Excel Report
+            </button>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+              <p className="font-semibold text-slate-900">Current export scope</p>
+              <p className="mt-1">
+                The Excel export follows your selected report scope:
+                <span className="font-semibold"> {filterLabel}</span>
+              </p>
+            </div>
           </div>
         </div>
       </div>
