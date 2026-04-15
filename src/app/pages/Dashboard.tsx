@@ -1,8 +1,7 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useAttendance } from "../context/AttendanceContext";
 import DragDropUpload from "../components/layout/DragDropUpload";
 import {
-  FileSpreadsheet,
   Users,
   Clock,
   Timer,
@@ -15,9 +14,7 @@ import {
   CalendarRange,
   CheckCircle2,
   AlertCircle,
-  Download,
-  Upload,
-  Database,
+  FileSpreadsheet,
 } from "lucide-react";
 import {
   LineChart,
@@ -68,12 +65,7 @@ export function Dashboard() {
     clearAllAttendanceHistory,
     selectedMonthScope,
     selectedDayScope,
-    exportFilteredWorkbook,
-    exportSystemBackupWorkbook,
-    importSystemBackupWorkbook,
   } = useAttendance();
-
-  const importBackupInputRef = useRef<HTMLInputElement | null>(null);
 
   const [feedback, setFeedback] = useState<{
     type: "success" | "error";
@@ -88,51 +80,6 @@ export function Dashboard() {
       : selectedMonthScope !== "all"
       ? formatMonthLabel(selectedMonthScope)
       : "All Records";
-
-  const handleExcelExport = () => {
-    const result = exportFilteredWorkbook();
-    setFeedback({
-      type: result.success ? "success" : "error",
-      message: result.message,
-    });
-  };
-
-  const handleBackupExport = () => {
-    const result = exportSystemBackupWorkbook();
-    setFeedback({
-      type: result.success ? "success" : "error",
-      message: result.message,
-    });
-  };
-
-  const handleBackupImportClick = () => {
-    importBackupInputRef.current?.click();
-  };
-
-  const handleBackupImportChange = async (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const confirmed = window.confirm(
-      "Importing a backup workbook will replace the current saved attendance data. Continue?"
-    );
-
-    if (!confirmed) {
-      e.target.value = "";
-      return;
-    }
-
-    const result = await importSystemBackupWorkbook(file);
-
-    setFeedback({
-      type: result.success ? "success" : "error",
-      message: result.message,
-    });
-
-    e.target.value = "";
-  };
 
   const handleDragDropUpload = (file: File) => {
     const dataTransfer = new DataTransfer();
@@ -193,8 +140,8 @@ export function Dashboard() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div className="xl:col-span-2 bg-white rounded-3xl p-10 border border-slate-200 border-dashed shadow-sm">
+      <div className="grid grid-cols-1 gap-6">
+        <div className="bg-white rounded-3xl p-10 border border-slate-200 border-dashed shadow-sm">
           <div className="flex flex-col items-center justify-center space-y-5 text-center">
             <div className="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center">
               <FileSpreadsheet className="w-8 h-8" />
@@ -219,88 +166,6 @@ export function Dashboard() {
                 {fileName} loaded successfully
               </p>
             )}
-          </div>
-        </div>
-
-        <div className="space-y-6">
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-2xl bg-slate-100 text-slate-700 flex items-center justify-center">
-                <FileSpreadsheet className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-slate-900">Reports</h3>
-                <p className="text-sm text-slate-500">
-                  Export the current report scope to Excel.
-                </p>
-              </div>
-            </div>
-
-            <button
-              onClick={handleExcelExport}
-              className="w-full inline-flex items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 hover:bg-emerald-100"
-            >
-              <FileSpreadsheet className="w-4 h-4" />
-              Export Excel Report
-            </button>
-
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-              <p className="font-semibold text-slate-900">Current export scope</p>
-              <p className="mt-1">
-                The Excel export follows your selected report scope:
-                <span className="font-semibold"> {filterLabel}</span>
-              </p>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-2xl bg-indigo-100 text-indigo-700 flex items-center justify-center">
-                <Database className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-slate-900">Backup / Restore</h3>
-                <p className="text-sm text-slate-500">
-                  Save your attendance data to an Excel backup workbook and restore
-                  it anytime.
-                </p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-3">
-              <button
-                onClick={handleBackupExport}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm font-semibold text-indigo-700 hover:bg-indigo-100"
-              >
-                <Download className="w-4 h-4" />
-                Export Backup Workbook
-              </button>
-
-              <button
-                onClick={handleBackupImportClick}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700 hover:bg-blue-100"
-              >
-                <Upload className="w-4 h-4" />
-                Import Backup Workbook
-              </button>
-
-              <input
-                ref={importBackupInputRef}
-                type="file"
-                accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
-                className="hidden"
-                onChange={handleBackupImportChange}
-              />
-            </div>
-
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-              <p className="font-semibold text-slate-900">Included in the backup</p>
-              <p className="mt-1">
-                Uploaded files, late records, generated undertime, exemptions,
-                absences, manual undertime, memo read status, and current scope
-                filters.
-              </p>
-            </div>
           </div>
         </div>
       </div>
