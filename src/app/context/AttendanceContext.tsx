@@ -137,6 +137,7 @@ interface AttendanceState {
   restoreExemption: (id: string) => void;
   restoreManualUndertime: (id: string) => void;
   markAllMemoAlertsAsRead: () => void;
+  exportFilteredWorkbook: () => { success: boolean; message: string };
 }
 
 function createId() {
@@ -160,6 +161,24 @@ function getMonthKey(dateValue: string) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   return `${year}-${month}`;
+}
+
+function formatMonthLabel(monthKey: string) {
+  const [year, month] = monthKey.split("-");
+  const date = new Date(Number(year), Number(month) - 1, 1);
+
+  return date.toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function formatDayLabel(dayValue: string) {
+  return new Date(dayValue).toLocaleDateString("en-US", {
+    month: "long",
+    day: "2-digit",
+    year: "numeric",
+  });
 }
 
 function getDefaultStoredData(): PersistedAttendanceData {
@@ -892,6 +911,120 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
     );
   };
 
+  const exportFilteredWorkbook = () => {
+    try {
+      const workbook = XLSX.utils.book_new();
+
+      const lateRows = lateRecords.map((record) => ({
+        Employee: record.name,
+        Date: record.date,
+        TimeIn: record.timeIn,
+        MinutesLate: record.minutesLate,
+        SecondsLate: record.secondsLate,
+        SourceFile: record.sourceFileName,
+      }));
+
+      const summaryRows = lateSummary.map((item) => ({
+        Employee: item.name,
+        TotalLates: item.totalLates,
+        TotalMinutesLate: item.totalMinutesLate,
+      }));
+
+      const exemptionRows = exemptions.map((item) => ({
+        Employee: item.name,
+        Date: item.date,
+        Reason: item.reason,
+      }));
+
+      const absenceRows = absences.map((item) => ({
+        Employee: item.name,
+        Date: item.date,
+        Reason: item.reason,
+      }));
+
+      const generatedUndertimeRows = generatedUndertimes.map((item) => ({
+        Employee: item.name,
+        Date: item.date,
+        TimeIn: item.timeIn,
+        SourceFile: item.sourceFileName,
+      }));
+
+      const manualUndertimeRows = manualUndertimes.map((item) => ({
+        Employee: item.name,
+        Date: item.date,
+        Reason: item.reason,
+        UndertimeHours: item.undertimeHours,
+        SourceType: item.sourceType ?? "",
+        OriginalTimeIn: item.originalTimeIn ?? "",
+        SourceLateRecordId: item.sourceLateRecordId ?? "",
+        IsManualOverride: item.isManualOverride ? "Yes" : "No",
+      }));
+
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.json_to_sheet(lateRows.length ? lateRows : [{ Message: "No data" }]),
+        "Late Records"
+      );
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.json_to_sheet(summaryRows.length ? summaryRows : [{ Message: "No data" }]),
+        "Late Summary"
+      );
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.json_to_sheet(
+          exemptionRows.length ? exemptionRows : [{ Message: "No data" }]
+        ),
+        "Exemptions"
+      );
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.json_to_sheet(absenceRows.length ? absenceRows : [{ Message: "No data" }]),
+        "Absences"
+      );
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.json_to_sheet(
+          generatedUndertimeRows.length
+            ? generatedUndertimeRows
+            : [{ Message: "No data" }]
+        ),
+        "System Undertime"
+      );
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.json_to_sheet(
+          manualUndertimeRows.length ? manualUndertimeRows : [{ Message: "No data" }]
+        ),
+        "Manual Undertime"
+      );
+
+      const suffix =
+        selectedDayScope !== "all"
+          ? formatDayLabel(selectedDayScope)
+              .replace(/[^\w\s-]/g, "")
+              .replace(/\s+/g, "-")
+          : selectedMonthScope !== "all"
+          ? formatMonthLabel(selectedMonthScope)
+              .replace(/[^\w\s-]/g, "")
+              .replace(/\s+/g, "-")
+          : "all-records";
+
+      XLSX.writeFile(workbook, `attendance-report-${suffix}.xlsx`);
+
+      return {
+        success: true,
+        message: "Excel report exported successfully.",
+      };
+    } catch (error) {
+      console.error("Excel export failed:", error);
+      return {
+        success: false,
+        message: "Excel export failed. Please try again.",
+      };
+    }
+  };
+
   return (
     <AttendanceContext.Provider
       value={{
@@ -924,6 +1057,7 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
         restoreExemption,
         restoreManualUndertime,
         markAllMemoAlertsAsRead,
+        exportFilteredWorkbook,
       }}
     >
       {children}
