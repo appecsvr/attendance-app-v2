@@ -17,10 +17,10 @@ interface AuthState {
   loading: boolean;
   workspace: Workspace | null;
   email: string | null;
-  signIn: (email: string, password: string) => Promise<{
-    success: boolean;
-    message: string;
-  }>;
+  signIn: (
+    email: string,
+    password: string
+  ) => Promise<{ success: boolean; message: string }>;
   signOut: () => Promise<void>;
 }
 
@@ -57,14 +57,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
-    let isMounted = true;
+    let mounted = true;
 
     async function bootstrap() {
       const {
         data: { session },
       } = await supabase.auth.getSession();
 
-      if (!isMounted) return;
+      if (!mounted) return;
 
       setSession(session);
       setUser(session?.user ?? null);
@@ -72,19 +72,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     }
 
-    bootstrap();
+    void bootstrap();
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      await loadProfile(session?.user ?? null);
-      setLoading(false);
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      void (async () => {
+        setSession(session);
+        setUser(session?.user ?? null);
+        await loadProfile(session?.user ?? null);
+        setLoading(false);
+      })();
     });
 
     return () => {
-      isMounted = false;
+      mounted = false;
       subscription.unsubscribe();
     };
   }, []);
