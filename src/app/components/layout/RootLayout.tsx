@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import { LogOut } from "lucide-react";
+import { useAuth } from "../../context/AuthContext";
 import { Link, Outlet, useLocation } from "react-router";
 import {
   LayoutDashboard,
@@ -60,6 +62,8 @@ export function RootLayout() {
     setSelectedMonthScope,
     setSelectedDayScope,
   } = useAttendance();
+
+  const { workspace, email, signOut } = useAuth();
 
   const [isBellOpen, setIsBellOpen] = useState(false);
 
@@ -200,7 +204,24 @@ export function RootLayout() {
               <button
                 onClick={() => setIsBellOpen((prev) => !prev)}
                 className="relative text-slate-500 hover:text-slate-700 transition-colors"
+              >            <div className="hidden md:flex items-center gap-3 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200">
+              <div>
+                <p className="text-xs font-semibold text-slate-900">
+                  {workspace ?? "No Workspace"}
+                </p>
+                <p className="text-[11px] text-slate-500">
+                  {email ?? "No email"}
+                </p>
+              </div>
+
+              <button
+                onClick={() => void signOut()}
+                className="inline-flex items-center gap-2 text-sm font-medium text-red-600 hover:text-red-700"
               >
+                <LogOut className="w-4 h-4" />
+                Logout
+              </button>
+            </div>
                 <Bell className="w-5 h-5" />
 
                 {unreadMemoCount > 0 && (
