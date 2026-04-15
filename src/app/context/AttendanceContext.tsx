@@ -120,6 +120,15 @@ interface AttendanceState {
     success: boolean;
     message: string;
   };
+  convertLateToUndertime: (payload: {
+    lateRecordId: string;
+    undertimeHours: string;
+    reason?: string;
+    isManualOverride?: boolean;
+  }) => {
+    success: boolean;
+    message: string;
+  };
   deleteUploadedFile: (fileId: string) => void;
   clearAllAttendanceHistory: () => void;
   deleteAbsencesByMonth: (monthKey: string) => void;
@@ -188,6 +197,10 @@ type WorkbookManualUndertimeRow = {
   reason: string;
   date: string;
   undertimeHours: string;
+  sourceLateRecordId?: string | number;
+  originalTimeIn?: string;
+  sourceType?: string;
+  isManualOverride?: string | number | boolean;
 };
 
 type WorkbookMemoReadRow = {
@@ -426,6 +439,12 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
   const adjustedLateRecords = useMemo(() => {
     if (allLateRecords.length === 0) return [];
 
+    const linkedUndertimeLateIds = new Set(
+      manualUndertimesState
+        .map((ut) => ut.sourceLateRecordId)
+        .filter(Boolean) as string[]
+    );
+
     const adjustmentCountMap = new Map<string, number>();
 
     exemptionsState.forEach((ex) => {
@@ -433,14 +452,20 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
       adjustmentCountMap.set(key, (adjustmentCountMap.get(key) ?? 0) + 1);
     });
 
-    manualUndertimesState.forEach((ut) => {
-      const key = `${normalizeName(ut.name)}|${normalizeDate(ut.date)}`;
-      adjustmentCountMap.set(key, (adjustmentCountMap.get(key) ?? 0) + 1);
-    });
+    manualUndertimesState
+      .filter((ut) => !ut.sourceLateRecordId)
+      .forEach((ut) => {
+        const key = `${normalizeName(ut.name)}|${normalizeDate(ut.date)}`;
+        adjustmentCountMap.set(key, (adjustmentCountMap.get(key) ?? 0) + 1);
+      });
 
     const consumedAdjustments = new Map<string, number>();
 
     return allLateRecords.filter((record) => {
+      if (linkedUndertimeLateIds.has(record.id)) {
+        return false;
+      }
+
       const key = `${normalizeName(record.name)}|${record.date}`;
       const allowed = adjustmentCountMap.get(key) ?? 0;
       const used = consumedAdjustments.get(key) ?? 0;
@@ -807,6 +832,8 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
     const newUndertime: UndertimeRecord = {
       ...ut,
       id: createId(),
+      sourceType: ut.sourceType ?? "manual-entry",
+      isManualOverride: ut.isManualOverride ?? true,
     };
 
     setManualUndertimes((prev) => [newUndertime, ...prev]);
@@ -817,6 +844,56 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
       success: true,
       message:
         "Manual undertime saved successfully and matching late record is now excluded.",
+    };
+  };
+
+  const convertLateToUndertime = (payload: {
+    lateRecordId: string;
+    undertimeHours: string;
+    reason?: string;
+    isManualOverride?: boolean;
+  }) => {
+    const lateRecord = allLateRecords.find(
+      (record) => record.id === payload.lateRecordId
+    );
+
+    if (!lateRecord) {
+      return {
+        success: false,
+        message: "The selected late record was not found.",
+      };
+    }
+
+    const alreadyConverted = manualUndertimesState.some(
+      (item) => item.sourceLateRecordId === lateRecord.id
+    );
+
+    if (alreadyConverted) {
+      return {
+        success: false,
+        message: "This late record has already been converted to undertime.",
+      };
+    }
+
+    const newUndertime: UndertimeRecord = {
+      id: createId(),
+      name: lateRecord.name,
+      date: lateRecord.date,
+      reason: payload.reason?.trim() || "Converted from late record",
+      undertimeHours: payload.undertimeHours,
+      sourceLateRecordId: lateRecord.id,
+      originalTimeIn: lateRecord.timeIn,
+      sourceType: "late-conversion",
+      isManualOverride: payload.isManualOverride ?? false,
+    };
+
+    setManualUndertimes((prev) => [newUndertime, ...prev]);
+    setSelectedMonthScope(getMonthKey(lateRecord.date));
+    setSelectedDayScope(lateRecord.date);
+
+    return {
+      success: true,
+      message: `${lateRecord.name} was successfully moved to Undertime Records.`,
     };
   };
 
@@ -953,8 +1030,12 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
       const manualUndertimeRows = manualUndertimes.map((item) => ({
         Employee: item.name,
         Date: item.date,
-        Hours: item.undertimeHours,
         Reason: item.reason,
+        UndertimeHours: item.undertimeHours,
+        SourceType: item.sourceType ?? "",
+        OriginalTimeIn: item.originalTimeIn ?? "",
+        SourceLateRecordId: item.sourceLateRecordId ?? "",
+        IsManualOverride: item.isManualOverride ? "Yes" : "No",
       }));
 
       XLSX.utils.book_append_sheet(
@@ -1086,6 +1167,10 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
         reason: item.reason,
         date: item.date,
         undertimeHours: item.undertimeHours,
+        sourceLateRecordId: item.sourceLateRecordId ?? "",
+        originalTimeIn: item.originalTimeIn ?? "",
+        sourceType: item.sourceType ?? "",
+        isManualOverride: item.isManualOverride ? 1 : 0,
       }));
 
       const memoReadRows = readMemoEmployeeNames.map((name) => ({
@@ -1174,7 +1259,19 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
         XLSX.utils.json_to_sheet(
           manualUndertimesRows.length
             ? manualUndertimesRows
-            : [{ id: "", name: "", reason: "", date: "", undertimeHours: "" }]
+            : [
+                {
+                  id: "",
+                  name: "",
+                  reason: "",
+                  date: "",
+                  undertimeHours: "",
+                  sourceLateRecordId: "",
+                  originalTimeIn: "",
+                  sourceType: "",
+                  isManualOverride: "",
+                },
+              ]
         ),
         "Manual_Undertime"
       );
@@ -1369,6 +1466,19 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
           reason: String(row.reason || ""),
           date: String(row.date),
           undertimeHours: String(row.undertimeHours || ""),
+          sourceLateRecordId: row.sourceLateRecordId
+            ? String(row.sourceLateRecordId)
+            : undefined,
+          originalTimeIn: row.originalTimeIn
+            ? String(row.originalTimeIn)
+            : undefined,
+          sourceType:
+            row.sourceType === "late-conversion" ? "late-conversion" : "manual-entry",
+          isManualOverride:
+            row.isManualOverride === true ||
+            row.isManualOverride === 1 ||
+            row.isManualOverride === "1" ||
+            String(row.isManualOverride || "").toLowerCase() === "true",
         }));
 
       const restoredMemoReadNames: string[] = safeArray<WorkbookMemoReadRow>(memoReadRows)
@@ -1426,6 +1536,7 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
         addExemption,
         addAbsence,
         addUndertime,
+        convertLateToUndertime,
         deleteUploadedFile,
         clearAllAttendanceHistory,
         deleteAbsencesByMonth,

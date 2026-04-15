@@ -1,19 +1,97 @@
-import { useState } from "react";
-import { Clock, Search, AlertCircle } from "lucide-react";
-import { useAttendance } from "../context/AttendanceContext";
+import { useMemo, useState } from "react";
+import { Clock, Search, AlertCircle, X } from "lucide-react";
+import { useAttendance, type LateRecord } from "../context/AttendanceContext";
+
+function getDefaultUndertimeStart(dateValue: string) {
+  const day = new Date(dateValue).getDay();
+  return day === 6 ? "7:00 AM" : "8:00 AM";
+}
+
+function getDefaultUndertimeRange(record: LateRecord) {
+  return `${getDefaultUndertimeStart(record.date)} to ${record.timeIn}`;
+}
 
 export function LateRecords() {
-  const { lateRecords, lateSummary } = useAttendance();
+  const { lateRecords, lateSummary, convertLateToUndertime } = useAttendance();
+
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState<"detailed" | "summary">("detailed");
+  const [selectedLateRecord, setSelectedLateRecord] = useState<LateRecord | null>(null);
+  const [manualFromTime, setManualFromTime] = useState("");
+  const [manualToTime, setManualToTime] = useState("");
+  const [manualPeriod, setManualPeriod] = useState("AM");
+  const [conversionReason, setConversionReason] = useState("");
+  const [feedback, setFeedback] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
 
-  const filteredRecords = lateRecords.filter((r) =>
-    r.name.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredRecords = useMemo(
+    () =>
+      lateRecords.filter((r) =>
+        r.name.toLowerCase().includes(searchTerm.toLowerCase())
+      ),
+    [lateRecords, searchTerm]
   );
 
-  const filteredSummary = lateSummary.filter((s) =>
-    s.name.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredSummary = useMemo(
+    () =>
+      lateSummary.filter((s) =>
+        s.name.toLowerCase().includes(searchTerm.toLowerCase())
+      ),
+    [lateSummary, searchTerm]
   );
+
+  const resetModal = () => {
+    setSelectedLateRecord(null);
+    setManualFromTime("");
+    setManualToTime("");
+    setManualPeriod("AM");
+    setConversionReason("");
+  };
+
+  const openUndertimeModal = (record: LateRecord) => {
+    setSelectedLateRecord(record);
+    setManualFromTime("");
+    setManualToTime("");
+    setManualPeriod("AM");
+    setConversionReason("");
+    setFeedback(null);
+  };
+
+  const handleConfirmUndertime = () => {
+    if (!selectedLateRecord) return;
+
+    const hasManualInput = manualFromTime.trim() || manualToTime.trim();
+
+    if (hasManualInput && (!manualFromTime.trim() || !manualToTime.trim())) {
+      setFeedback({
+        type: "error",
+        message: "Please complete both From and To fields for manual override.",
+      });
+      return;
+    }
+
+    const undertimeHours = hasManualInput
+      ? `${manualFromTime.trim()} to ${manualToTime.trim()} ${manualPeriod}`
+      : getDefaultUndertimeRange(selectedLateRecord);
+
+    const result = convertLateToUndertime({
+      lateRecordId: selectedLateRecord.id,
+      undertimeHours,
+      isManualOverride: Boolean(hasManualInput),
+      reason: conversionReason.trim(),
+    });
+
+    setFeedback({
+      type: result.success ? "success" : "error",
+      message: result.message,
+    });
+
+    if (result.success) {
+      resetModal();
+    }
+  };
 
   return (
     <div className="space-y-6 h-full flex flex-col">
@@ -49,6 +127,19 @@ export function LateRecords() {
         </div>
       </div>
 
+      {feedback && (
+        <div
+          className={`rounded-2xl border px-4 py-4 ${
+            feedback.type === "success"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+              : "border-red-200 bg-red-50 text-red-800"
+          }`}
+        >
+          <p className="text-sm font-semibold">System Message</p>
+          <p className="text-sm mt-1">{feedback.message}</p>
+        </div>
+      )}
+
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex-1 flex flex-col">
         <div className="p-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50/50">
           <div className="relative max-w-md w-full">
@@ -81,6 +172,9 @@ export function LateRecords() {
                     <th className="py-3 px-6 text-xs font-semibold text-slate-500 uppercase text-right">
                       Minutes Late
                     </th>
+                    <th className="py-3 px-6 text-xs font-semibold text-slate-500 uppercase text-right">
+                      Action
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -98,10 +192,19 @@ export function LateRecords() {
                       <td className="py-3 px-6 text-slate-600 text-sm">{record.timeIn}</td>
                       <td className="py-3 px-6 text-right">
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200">
-                          <Clock className="w-3 h-3" /> {record.minutesLate > 0
-  ? `${record.minutesLate} min ${record.secondsLate} sec`
-  : `${record.secondsLate} sec`}
+                          <Clock className="w-3 h-3" />
+                          {record.minutesLate > 0
+                            ? `${record.minutesLate} min ${record.secondsLate} sec`
+                            : `${record.secondsLate} sec`}
                         </span>
+                      </td>
+                      <td className="py-3 px-6 text-right">
+                        <button
+                          onClick={() => openUndertimeModal(record)}
+                          className="inline-flex items-center rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors"
+                        >
+                          Mark as Undertime
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -152,6 +255,109 @@ export function LateRecords() {
           )}
         </div>
       </div>
+
+      {selectedLateRecord && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+          <div className="w-full max-w-2xl rounded-3xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+              <div>
+                <h3 className="text-xl font-bold text-slate-900">
+                  Convert Late Record to Undertime
+                </h3>
+                <p className="text-sm text-slate-500 mt-1">
+                  This will remove the selected record from Late Records and move it to
+                  Undertime.
+                </p>
+              </div>
+              <button
+                onClick={resetModal}
+                className="rounded-full p-2 text-slate-500 hover:bg-slate-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="px-6 py-5 space-y-5">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-sm font-semibold text-slate-900">{selectedLateRecord.name}</p>
+                <p className="text-sm text-slate-600 mt-1">
+                  {selectedLateRecord.date} • {selectedLateRecord.timeIn}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">
+                  Suggested Undertime Range
+                </label>
+                <div className="rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm font-medium text-indigo-800">
+                  {getDefaultUndertimeRange(selectedLateRecord)}
+                </div>
+                <p className="text-xs text-slate-500 mt-2">
+                  Monday to Friday starts at 8:00 AM. Saturday starts at 7:00 AM.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 p-4">
+                <h4 className="text-sm font-semibold text-slate-900 mb-3">
+                  Manual Override (Optional)
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_140px] gap-3">
+                  <input
+                    value={manualFromTime}
+                    onChange={(e) => setManualFromTime(e.target.value)}
+                    placeholder="From (ex. 8:00)"
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <input
+                    value={manualToTime}
+                    onChange={(e) => setManualToTime(e.target.value)}
+                    placeholder="To (ex. 10:44:38)"
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <select
+                    value={manualPeriod}
+                    onChange={(e) => setManualPeriod(e.target.value)}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="AM">AM</option>
+                    <option value="PM">PM</option>
+                  </select>
+                </div>
+                <p className="text-xs text-slate-500 mt-2">
+                  Leave this blank if you want to use the system-generated range.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">
+                  Reason (Optional)
+                </label>
+                <input
+                  value={conversionReason}
+                  onChange={(e) => setConversionReason(e.target.value)}
+                  placeholder="e.g. Approved undertime conversion"
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 border-t border-slate-200 px-6 py-4 bg-slate-50">
+              <button
+                onClick={resetModal}
+                className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmUndertime}
+                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+              >
+                Confirm Undertime
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
