@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import type { Session, User } from "@supabase/supabase-js";
-import { supabase } from "../../lib/supabase";
+import { supabase, supabaseConfigError } from "../../lib/supabase";
 
 type Workspace = "APP" | "WAIS";
 
@@ -17,6 +17,7 @@ interface AuthState {
   loading: boolean;
   workspace: Workspace | null;
   email: string | null;
+  configError: string;
   signIn: (
     email: string,
     password: string
@@ -34,9 +35,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [email, setEmail] = useState<string | null>(null);
 
   async function loadProfile(authUser: User | null) {
-    if (!authUser) {
+    if (!authUser || !supabase) {
       setWorkspace(null);
-      setEmail(null);
+      setEmail(authUser?.email ?? null);
       return;
     }
 
@@ -60,6 +61,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let mounted = true;
 
     async function bootstrap() {
+      if (!supabase) {
+        setLoading(false);
+        return;
+      }
+
       const {
         data: { session },
       } = await supabase.auth.getSession();
@@ -73,6 +79,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     void bootstrap();
+
+    if (!supabase) {
+      return () => {
+        mounted = false;
+      };
+    }
 
     const {
       data: { subscription },
@@ -92,6 +104,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   async function signIn(email: string, password: string) {
+    if (!supabase) {
+      return {
+        success: false,
+        message: supabaseConfigError,
+      };
+    }
+
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -111,6 +130,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function signOut() {
+    if (!supabase) return;
     await supabase.auth.signOut();
   }
 
@@ -121,6 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       workspace,
       email,
+      configError: supabaseConfigError,
       signIn,
       signOut,
     }),

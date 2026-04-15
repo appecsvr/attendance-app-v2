@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { Navigate } from "react-router";
-import { Clock, LogIn } from "lucide-react";
+import { Clock, LogIn, AlertTriangle } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 export default function LoginPage() {
-  const { signIn, user, loading } = useAuth();
+  const { signIn, user, loading, configError } = useAuth();
 
   const [email, setEmail] = useState("app@attendance.local");
   const [password, setPassword] = useState("");
@@ -42,6 +42,15 @@ export default function LoginPage() {
           </div>
         </div>
 
+        {configError ? (
+          <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 mt-0.5" />
+              <div>{configError}</div>
+            </div>
+          </div>
+        ) : null}
+
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -78,7 +87,7 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || !!configError}
             className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-semibold px-4 py-3 transition-colors"
           >
             <LogIn className="w-4 h-4" />
