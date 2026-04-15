@@ -56,6 +56,10 @@ export interface UndertimeRecord {
   date: string;
   reason: string;
   undertimeHours: string;
+  sourceLateRecordId?: string;
+  originalTimeIn?: string;
+  sourceType?: "manual-entry" | "late-conversion";
+  isManualOverride?: boolean;
 }
 
 export interface MemoAlert {
