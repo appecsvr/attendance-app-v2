@@ -7,6 +7,7 @@ import React, {
   type ReactNode,
 } from "react";
 import * as XLSX from "xlsx";
+import { useAuth } from "./AuthContext";
 
 export interface LateRecord {
   id: string;
@@ -194,12 +195,17 @@ function getDefaultStoredData(): PersistedAttendanceData {
   };
 }
 
-function getStoredData(): PersistedAttendanceData {
-  if (typeof window === "undefined") {
+function buildStorageKey(workspace: string | null | undefined) {
+  if (!workspace) return null;
+  return `attendance-system-v6-${workspace}`;
+}
+
+function getStoredData(storageKey: string | null): PersistedAttendanceData {
+  if (typeof window === "undefined" || !storageKey) {
     return getDefaultStoredData();
   }
 
-  const raw = window.localStorage.getItem("attendance-system-v6");
+  const raw = window.localStorage.getItem(storageKey);
 
   if (!raw) {
     return getDefaultStoredData();
@@ -242,35 +248,54 @@ function matchesCurrentScope(
 }
 
 const AttendanceContext = createContext<AttendanceState | undefined>(undefined);
-const STORAGE_KEY = "attendance-system-v6";
+const STORAGE_KEY_PREFIX = "attendance-system-v6";
 
 export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
-  const initialData = getStoredData();
+  const { workspace, loading: authLoading } = useAuth();
 
-  const [fileName, setFileName] = useState(initialData.fileName);
-  const [uploadedFiles, setUploadedFiles] = useState<UploadedAttendanceFile[]>(
-    initialData.uploadedFiles
-  );
-  const [exemptionsState, setExemptions] = useState<Exemption[]>(
-    initialData.exemptions
-  );
-  const [absencesState, setAbsences] = useState<AbsentRecord[]>(
-    initialData.absences
-  );
+  const storageKey = useMemo(() => {
+    if (!workspace) return null;
+    return buildStorageKey(workspace) ?? `${STORAGE_KEY_PREFIX}-${workspace}`;
+  }, [workspace]);
+
+  const [fileName, setFileName] = useState("");
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedAttendanceFile[]>([]);
+  const [exemptionsState, setExemptions] = useState<Exemption[]>([]);
+  const [absencesState, setAbsences] = useState<AbsentRecord[]>([]);
   const [manualUndertimesState, setManualUndertimes] = useState<
     UndertimeRecord[]
-  >(initialData.manualUndertimes);
-  const [readMemoEmployeeNames, setReadMemoEmployeeNames] = useState<string[]>(
-    initialData.readMemoEmployeeNames
-  );
-  const [selectedMonthScope, setSelectedMonthScope] = useState<string>(
-    initialData.selectedMonthScope || "all"
-  );
-  const [selectedDayScope, setSelectedDayScope] = useState<string>(
-    initialData.selectedDayScope || "all"
-  );
+  >([]);
+  const [readMemoEmployeeNames, setReadMemoEmployeeNames] = useState<string[]>([]);
+  const [selectedMonthScope, setSelectedMonthScope] = useState<string>("all");
+  const [selectedDayScope, setSelectedDayScope] = useState<string>("all");
+  const [isStorageHydrated, setIsStorageHydrated] = useState(false);
 
   useEffect(() => {
+    if (authLoading || !storageKey) return;
+
+    const initialData = getStoredData(storageKey);
+
+    setFileName(initialData.fileName);
+    setUploadedFiles(initialData.uploadedFiles);
+    setExemptions(initialData.exemptions);
+    setAbsences(initialData.absences);
+    setManualUndertimes(initialData.manualUndertimes);
+    setReadMemoEmployeeNames(initialData.readMemoEmployeeNames);
+    setSelectedMonthScope(initialData.selectedMonthScope || "all");
+    setSelectedDayScope(initialData.selectedDayScope || "all");
+    setIsStorageHydrated(true);
+  }, [authLoading, storageKey]);
+
+  useEffect(() => {
+    if (
+      typeof window === "undefined" ||
+      authLoading ||
+      !storageKey ||
+      !isStorageHydrated
+    ) {
+      return;
+    }
+
     const payload: PersistedAttendanceData = {
       fileName,
       uploadedFiles,
@@ -282,8 +307,11 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
       selectedDayScope,
     };
 
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    window.localStorage.setItem(storageKey, JSON.stringify(payload));
   }, [
+    authLoading,
+    storageKey,
+    isStorageHydrated,
     fileName,
     uploadedFiles,
     exemptionsState,
@@ -508,7 +536,9 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
 
         workbook.SheetNames.forEach((sheetName) => {
           const worksheet = workbook.Sheets[sheetName];
-          const jsonData: unknown[] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+          const jsonData: unknown[] = XLSX.utils.sheet_to_json(worksheet, {
+            header: 1,
+          });
 
           for (let i = 4; i < jsonData.length; i += 1) {
             const row = jsonData[i] as unknown[];
@@ -876,6 +906,10 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
     setReadMemoEmployeeNames([]);
     setSelectedMonthScope("all");
     setSelectedDayScope("all");
+
+    if (typeof window !== "undefined" && storageKey) {
+      window.localStorage.removeItem(storageKey);
+    }
   };
 
   const deleteAbsencesByMonth = (monthKey: string) => {
