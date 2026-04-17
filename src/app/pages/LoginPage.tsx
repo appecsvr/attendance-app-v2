@@ -37,7 +37,7 @@ export default function LoginPage() {
         <div className="flex items-center gap-3 mb-8">
           <div className="w-12 h-12 rounded-2xl bg-white shadow-md flex items-center justify-center">
             <img
-              src="/watts-logo.png"
+              src="/Watts-logo.png"
               alt="Watts Logo"
               className="w-8 h-8 object-contain"
             />
