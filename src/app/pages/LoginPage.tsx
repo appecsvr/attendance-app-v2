@@ -35,13 +35,13 @@ export default function LoginPage() {
 
         {/* HEADER WITH LOGO */}
         <div className="flex items-center gap-3 mb-8">
-          <div className="w-12 h-12 rounded-2xl bg-white shadow-md flex items-center justify-center">
-            <img
-              src="/Watts-logo.png"
-              alt="Watts Logo"
-              className="w-8 h-8 object-contain"
-            />
-          </div>
+<div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg flex items-center justify-center">
+  <img
+    src="/Watts-logo.png"
+    alt="Watts Logo"
+    className="w-8 h-8 object-contain"
+  />
+</div>
           <div>
             <h1 className="text-2xl font-bold text-slate-900">
               WATTS App TimeCore
