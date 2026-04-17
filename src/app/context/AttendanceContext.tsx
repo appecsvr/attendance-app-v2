@@ -841,7 +841,7 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
 
     setManualUndertimes((prev) => [newUndertime, ...prev]);
     setSelectedMonthScope(getMonthKey(lateRecord.date));
-    setSelectedDayScope(lateRecord.date);
+    setSelectedDayScope("all");
 
     return {
       success: true,
