@@ -37,7 +37,7 @@ export default function LoginPage() {
             <Clock className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">TimeCore</h1>
+            <h1 className="text-2xl font-bold text-slate-900">WATTS App Industrial Sales Corp.</h1>
             <p className="text-sm text-slate-500">HR Attendance System Login</p>
           </div>
         </div>
