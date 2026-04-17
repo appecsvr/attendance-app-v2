@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Navigate } from "react-router";
-import { Clock, LogIn, AlertTriangle } from "lucide-react";
+import { LogIn, AlertTriangle } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 export default function LoginPage() {
@@ -32,16 +32,27 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-slate-100 flex items-center justify-center px-4">
       <div className="w-full max-w-md bg-white border border-slate-200 shadow-xl rounded-3xl p-8">
+
+        {/* HEADER WITH LOGO */}
         <div className="flex items-center gap-3 mb-8">
-          <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center">
-            <Clock className="w-6 h-6 text-white" />
+          <div className="w-12 h-12 rounded-2xl bg-white shadow-md flex items-center justify-center">
+            <img
+              src="/watts-logo.png"
+              alt="Watts Logo"
+              className="w-8 h-8 object-contain"
+            />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">WATTS App TimeCore</h1>
-            <p className="text-sm text-slate-500">HR Attendance System Login</p>
+            <h1 className="text-2xl font-bold text-slate-900">
+              WATTS App TimeCore
+            </h1>
+            <p className="text-sm text-slate-500">
+              HR Attendance System Login
+            </p>
           </div>
         </div>
 
+        {/* CONFIG ERROR */}
         {configError ? (
           <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
             <div className="flex items-start gap-2">
@@ -51,6 +62,7 @@ export default function LoginPage() {
           </div>
         ) : null}
 
+        {/* FORM */}
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
