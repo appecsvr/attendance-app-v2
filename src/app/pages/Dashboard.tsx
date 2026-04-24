@@ -82,13 +82,14 @@ export function Dashboard() {
       ? formatMonthLabel(selectedMonthScope)
       : "All Records";
 
-  const handleExcelExport = () => {
-    const result = exportFilteredWorkbook();
-    setFeedback({
-      type: result.success ? "success" : "error",
-      message: result.message,
-    });
-  };
+const handleExcelExport = async () => {
+  const result = await exportFilteredWorkbook();
+
+  setFeedback({
+    type: result.success ? "success" : "error",
+    message: result.message,
+  });
+};
 
   const handleDragDropUpload = (file: File) => {
     const dataTransfer = new DataTransfer();

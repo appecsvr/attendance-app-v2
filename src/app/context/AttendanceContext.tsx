@@ -945,396 +945,257 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
     );
   };
 
-const exportFilteredWorkbook = () => {
-  try {
-    const workbook = XLSX.utils.book_new();
+  const exportFilteredWorkbook = () => {
+    try {
+      const workbook = XLSX.utils.book_new();
 
-    const WAIS_EMPLOYEES = [
-      "Agravio, John Maric",
-      "Aquino, Armando",
-      "Cantillon, Ma. Louissa",
-      "Codilan, Ian Christopher",
-      "Cruz, Gino",
-      "Cruz, Nathaniel Philip",
-      "Engay, Lovely Jane",
-      "Loterte, Jenny Lyn",
-      "Pascua, Joseph",
-      "Pascual, Lucky Joy",
-      "Pesquerra, Louis Gabriel",
-      "Ramirez, Rejohn",
-      "Raquem, Karl Anthony",
-      "Tapat, Leilani",
-      "Yatsu, Nanako",
-    ];
+      const reportScope =
+        selectedDayScope !== "all"
+          ? formatDayLabel(selectedDayScope)
+          : selectedMonthScope !== "all"
+          ? formatMonthLabel(selectedMonthScope)
+          : "All Records";
 
-    const APP_EMPLOYEES = [
-      "Aclan, Junrey",
-      "Azcueta, Jerwin",
-      "Bajar, Joseph",
-      "Bautista, Gerry",
-      "Bayan, Juewars",
-      "Bertulfo, Hermilo",
-      "Bido, Alonzo",
-      "Bonaobra, Davidson",
-      "Cababat, Chesterson",
-      "Caban, Cris",
-      "Calicdan, Ednerson",
-      "Campita, Justin",
-      "Clemente, Ricardo Jr.",
-      "Coste, Welmar",
-      "De Jesus, Roy Rolan",
-      "Dometita, Bryan Lloyd",
-      "Escarcha, Carlito",
-      "Estuaria, Christian",
-      "Francisco, Jhon Mar",
-      "Hiteroza, Isauro",
-      "Magday, Elmer",
-      "Mapa, Arnel",
-      "Meeks, Bryan",
-      "Obligar, Bernal",
-      "Olesco, Alvin",
-      "Omapas Jr., Teddy",
-      "Omegan, Jayson",
-      "Radaza, Marifie",
-      "Samson, John Paul",
-      "Sisbas, Jessie",
-      "Soriano, Ariel",
-      "Suarez, Elmer",
-      "Urbano, Ronald",
-      "Veruela, John Wally",
-      "Zate, Mario",
-    ];
+      const generatedAt = new Date().toLocaleString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
 
-    const cleanName = (name: string) =>
-      name.trim().replace(/\s+/g, " ").toLowerCase();
+      const noDataRow = (columns: number) => [
+        "No data available for the selected report scope.",
+        ...Array(Math.max(columns - 1, 0)).fill(""),
+      ];
 
-    const waisSet = new Set(WAIS_EMPLOYEES.map(cleanName));
-    const appSet = new Set(APP_EMPLOYEES.map(cleanName));
+      const safeSheetName = (name: string) => name.slice(0, 31);
 
-    const getTeam = (name: string) => {
-      const normalized = cleanName(name);
+      const addProfessionalSheet = (
+        sheetName: string,
+        title: string,
+        headers: string[],
+        rows: (string | number)[][],
+        widths: number[]
+      ) => {
+        const displayRows = rows.length ? rows : [noDataRow(headers.length)];
+        const tableStartRow = 6;
+        const worksheetRows = [
+          [title],
+          ["Report Scope", reportScope],
+          ["Generated", generatedAt],
+          [],
+          headers,
+          ...displayRows,
+        ];
 
-      if (waisSet.has(normalized)) return "WAIS";
-      if (appSet.has(normalized)) return "APP";
+        const worksheet = XLSX.utils.aoa_to_sheet(worksheetRows);
 
-      return "UNASSIGNED";
-    };
+        worksheet["!cols"] = widths.map((width) => ({ wch: width }));
+        worksheet["!merges"] = [
+          {
+            s: { r: 0, c: 0 },
+            e: { r: 0, c: Math.max(headers.length - 1, 0) },
+          },
+        ];
+        worksheet["!autofilter"] = {
+          ref: XLSX.utils.encode_range({
+            s: { r: tableStartRow - 1, c: 0 },
+            e: {
+              r: Math.max(tableStartRow - 1 + displayRows.length, tableStartRow - 1),
+              c: Math.max(headers.length - 1, 0),
+            },
+          }),
+        };
+        worksheet["!freeze"] = { xSplit: 0, ySplit: tableStartRow };
 
-    const sortByName = <T extends { name: string }>(items: T[]) =>
-      [...items].sort((a, b) => a.name.localeCompare(b.name));
+        XLSX.utils.book_append_sheet(
+          workbook,
+          worksheet,
+          safeSheetName(sheetName)
+        );
+      };
 
-    const byTeam = <T extends { name: string }>(items: T[], team: string) =>
-      sortByName(items.filter((item) => getTeam(item.name) === team));
+      const memoReviewRows = lateSummary
+        .filter((item) => item.totalLates >= 4)
+        .map((item) => [
+          item.name,
+          item.totalLates,
+          item.totalMinutesLate,
+          "For memo review",
+        ]);
 
-    const reportScope =
-      selectedDayScope !== "all"
-        ? formatDayLabel(selectedDayScope)
-        : selectedMonthScope !== "all"
-        ? formatMonthLabel(selectedMonthScope)
-        : "All Records";
+      const totalLateMinutes = lateSummary.reduce(
+        (sum, item) => sum + item.totalMinutesLate,
+        0
+      );
 
-    const addSection = (
-      rows: any[][],
-      title: string,
-      headers: string[],
-      dataRows: any[][]
-    ) => {
-      rows.push([]);
-      rows.push([title]);
-      rows.push(headers);
+      const executiveRows: (string | number)[][] = [
+        ["Total Uploaded Files", uploadedFiles.length, ""],
+        ["Total Late Records", lateRecords.length, ""],
+        ["Employees With Late Records", lateSummary.length, ""],
+        ["Total Late Minutes", totalLateMinutes, ""],
+        ["Employees For Memo Review", memoReviewRows.length, "4 or more lates"],
+        ["Exemptions", exemptions.length, ""],
+        ["Absences", absences.length, ""],
+        ["System Undertime Records", generatedUndertimes.length, ""],
+        ["Manual Undertime Records", manualUndertimes.length, ""],
+        [],
+        ["Memo Review List", "", ""],
+        ["Employee", "Total Lates", "Total Minutes Late"],
+        ...(memoReviewRows.length
+          ? memoReviewRows.map((row) => [row[0], row[1], row[2]])
+          : [["No employees reached memo threshold.", "", ""]]),
+      ];
 
-      if (dataRows.length > 0) {
-        rows.push(...dataRows);
-      } else {
-        rows.push(["No data"]);
-      }
-    };
+      addProfessionalSheet(
+        "Executive Summary",
+        "TIMECORE ATTENDANCE REPORT - EXECUTIVE SUMMARY",
+        ["Metric", "Value", "Notes"],
+        executiveRows,
+        [34, 18, 32]
+      );
 
-    const lateSummaryRows: any[][] = [
-      ["TIMECORE ATTENDANCE REPORT"],
-      ["Report Scope:", reportScope],
-      ["Generated Date:", new Date().toLocaleString("en-US")],
-      [],
-      ["LATE RECORDS, LATE SUMMARY & EXEMPTIONS"],
-    ];
+      addProfessionalSheet(
+        "Late Records",
+        "TIMECORE ATTENDANCE REPORT - LATE RECORDS",
+        [
+          "Employee",
+          "Date",
+          "Time In",
+          "Minutes Late",
+          "Seconds Late",
+          "Total Seconds Late",
+          "Source File",
+        ],
+        lateRecords.map((record) => [
+          record.name,
+          record.date,
+          record.timeIn,
+          record.minutesLate,
+          record.secondsLate,
+          record.totalSecondsLate,
+          record.sourceFileName,
+        ]),
+        [28, 14, 16, 16, 16, 18, 28]
+      );
 
-    addSection(
-      lateSummaryRows,
-      "WAIS (ADMIN) - LATE SUMMARY",
-      ["Employee", "Total Lates", "Total Minutes Late"],
-      byTeam(lateSummary, "WAIS").map((item) => [
-        item.name,
-        item.totalLates,
-        item.totalMinutesLate,
-      ])
-    );
+      addProfessionalSheet(
+        "Late Summary",
+        "TIMECORE ATTENDANCE REPORT - LATE SUMMARY",
+        ["Employee", "Total Lates", "Total Minutes Late", "Memo Status"],
+        lateSummary.map((item) => [
+          item.name,
+          item.totalLates,
+          item.totalMinutesLate,
+          item.totalLates >= 4 ? "For memo review" : "Normal",
+        ]),
+        [30, 16, 20, 20]
+      );
 
-    addSection(
-      lateSummaryRows,
-      "APP (PRODUCTION) - LATE SUMMARY",
-      ["Employee", "Total Lates", "Total Minutes Late"],
-      byTeam(lateSummary, "APP").map((item) => [
-        item.name,
-        item.totalLates,
-        item.totalMinutesLate,
-      ])
-    );
+      addProfessionalSheet(
+        "Exemptions",
+        "TIMECORE ATTENDANCE REPORT - EXEMPTIONS",
+        ["Employee", "Date", "Minutes Late", "Reason"],
+        exemptions.map((item) => [
+          item.name,
+          item.date,
+          item.minutesLate ?? "",
+          item.reason,
+        ]),
+        [30, 14, 16, 46]
+      );
 
-    addSection(
-      lateSummaryRows,
-      "UNASSIGNED - LATE SUMMARY",
-      ["Employee", "Total Lates", "Total Minutes Late"],
-      byTeam(lateSummary, "UNASSIGNED").map((item) => [
-        item.name,
-        item.totalLates,
-        item.totalMinutesLate,
-      ])
-    );
+      addProfessionalSheet(
+        "Absences",
+        "TIMECORE ATTENDANCE REPORT - ABSENCES",
+        ["Employee", "Date", "Reason"],
+        absences.map((item) => [item.name, item.date, item.reason]),
+        [30, 14, 46]
+      );
 
-    addSection(
-      lateSummaryRows,
-      "WAIS (ADMIN) - LATE RECORDS",
-      ["Employee", "Date", "Time In", "Minutes Late", "Seconds Late", "Source File"],
-      byTeam(lateRecords, "WAIS").map((record) => [
-        record.name,
-        record.date,
-        record.timeIn,
-        record.minutesLate,
-        record.secondsLate,
-        record.sourceFileName,
-      ])
-    );
+      addProfessionalSheet(
+        "System Undertime",
+        "TIMECORE ATTENDANCE REPORT - SYSTEM UNDERTIME",
+        ["Employee", "Date", "Time In", "Source File"],
+        generatedUndertimes.map((item) => [
+          item.name,
+          item.date,
+          item.timeIn,
+          item.sourceFileName,
+        ]),
+        [30, 14, 16, 28]
+      );
 
-    addSection(
-      lateSummaryRows,
-      "APP (PRODUCTION) - LATE RECORDS",
-      ["Employee", "Date", "Time In", "Minutes Late", "Seconds Late", "Source File"],
-      byTeam(lateRecords, "APP").map((record) => [
-        record.name,
-        record.date,
-        record.timeIn,
-        record.minutesLate,
-        record.secondsLate,
-        record.sourceFileName,
-      ])
-    );
+      addProfessionalSheet(
+        "Manual Undertime",
+        "TIMECORE ATTENDANCE REPORT - MANUAL UNDERTIME",
+        [
+          "Employee",
+          "Date",
+          "Undertime Hours",
+          "Reason",
+          "Source Type",
+          "Original Time In",
+          "Manual Override",
+        ],
+        manualUndertimes.map((item) => [
+          item.name,
+          item.date,
+          item.undertimeHours,
+          item.reason,
+          item.sourceType ?? "Manual entry",
+          item.originalTimeIn ?? "",
+          item.isManualOverride ? "Yes" : "No",
+        ]),
+        [30, 14, 18, 46, 20, 18, 18]
+      );
 
-    addSection(
-      lateSummaryRows,
-      "UNASSIGNED - LATE RECORDS",
-      ["Employee", "Date", "Time In", "Minutes Late", "Seconds Late", "Source File"],
-      byTeam(lateRecords, "UNASSIGNED").map((record) => [
-        record.name,
-        record.date,
-        record.timeIn,
-        record.minutesLate,
-        record.secondsLate,
-        record.sourceFileName,
-      ])
-    );
+      addProfessionalSheet(
+        "Uploaded Files",
+        "TIMECORE ATTENDANCE REPORT - UPLOADED FILES",
+        ["File Name", "Uploaded At", "Late Records", "System Undertime"],
+        uploadedFiles.map((item) => [
+          item.fileName,
+          new Date(item.uploadedAt).toLocaleString("en-US"),
+          item.lateRecords.length,
+          item.generatedUndertimes.length,
+        ]),
+        [36, 26, 16, 20]
+      );
 
-    addSection(
-      lateSummaryRows,
-      "WAIS (ADMIN) - EXEMPTIONS",
-      ["Employee", "Date", "Reason"],
-      byTeam(exemptions, "WAIS").map((item) => [
-        item.name,
-        item.date,
-        item.reason,
-      ])
-    );
+      workbook.Props = {
+        Title: `TimeCore Attendance Report - ${reportScope}`,
+        Subject: "Attendance Report",
+        Author: "TimeCore HR Attendance System",
+        CreatedDate: new Date(),
+      };
 
-    addSection(
-      lateSummaryRows,
-      "APP (PRODUCTION) - EXEMPTIONS",
-      ["Employee", "Date", "Reason"],
-      byTeam(exemptions, "APP").map((item) => [
-        item.name,
-        item.date,
-        item.reason,
-      ])
-    );
+      const suffix =
+        selectedDayScope !== "all"
+          ? formatDayLabel(selectedDayScope)
+              .replace(/[^\w\s-]/g, "")
+              .replace(/\s+/g, "-")
+          : selectedMonthScope !== "all"
+          ? formatMonthLabel(selectedMonthScope)
+              .replace(/[^\w\s-]/g, "")
+              .replace(/\s+/g, "-")
+          : "all-records";
 
-    addSection(
-      lateSummaryRows,
-      "UNASSIGNED - EXEMPTIONS",
-      ["Employee", "Date", "Reason"],
-      byTeam(exemptions, "UNASSIGNED").map((item) => [
-        item.name,
-        item.date,
-        item.reason,
-      ])
-    );
+      XLSX.writeFile(workbook, `timecore-attendance-report-${suffix}.xlsx`);
 
-    const absenceUndertimeRows: any[][] = [
-      ["TIMECORE ATTENDANCE REPORT"],
-      ["Report Scope:", reportScope],
-      ["Generated Date:", new Date().toLocaleString("en-US")],
-      [],
-      ["ABSENCES & UNDERTIME RECORDS"],
-    ];
-
-    addSection(
-      absenceUndertimeRows,
-      "WAIS (ADMIN) - ABSENCES",
-      ["Employee", "Date", "Reason"],
-      byTeam(absences, "WAIS").map((item) => [
-        item.name,
-        item.date,
-        item.reason,
-      ])
-    );
-
-    addSection(
-      absenceUndertimeRows,
-      "APP (PRODUCTION) - ABSENCES",
-      ["Employee", "Date", "Reason"],
-      byTeam(absences, "APP").map((item) => [
-        item.name,
-        item.date,
-        item.reason,
-      ])
-    );
-
-    addSection(
-      absenceUndertimeRows,
-      "UNASSIGNED - ABSENCES",
-      ["Employee", "Date", "Reason"],
-      byTeam(absences, "UNASSIGNED").map((item) => [
-        item.name,
-        item.date,
-        item.reason,
-      ])
-    );
-
-    addSection(
-      absenceUndertimeRows,
-      "WAIS (ADMIN) - SYSTEM UNDERTIME",
-      ["Employee", "Date", "Time In", "Source File"],
-      byTeam(generatedUndertimes, "WAIS").map((item) => [
-        item.name,
-        item.date,
-        item.timeIn,
-        item.sourceFileName,
-      ])
-    );
-
-    addSection(
-      absenceUndertimeRows,
-      "APP (PRODUCTION) - SYSTEM UNDERTIME",
-      ["Employee", "Date", "Time In", "Source File"],
-      byTeam(generatedUndertimes, "APP").map((item) => [
-        item.name,
-        item.date,
-        item.timeIn,
-        item.sourceFileName,
-      ])
-    );
-
-    addSection(
-      absenceUndertimeRows,
-      "UNASSIGNED - SYSTEM UNDERTIME",
-      ["Employee", "Date", "Time In", "Source File"],
-      byTeam(generatedUndertimes, "UNASSIGNED").map((item) => [
-        item.name,
-        item.date,
-        item.timeIn,
-        item.sourceFileName,
-      ])
-    );
-
-    addSection(
-      absenceUndertimeRows,
-      "WAIS (ADMIN) - MANUAL UNDERTIME",
-      ["Employee", "Date", "Reason", "Undertime Hours", "Source Type", "Override"],
-      byTeam(manualUndertimes, "WAIS").map((item) => [
-        item.name,
-        item.date,
-        item.reason,
-        item.undertimeHours,
-        item.sourceType ?? "",
-        item.isManualOverride ? "Yes" : "No",
-      ])
-    );
-
-    addSection(
-      absenceUndertimeRows,
-      "APP (PRODUCTION) - MANUAL UNDERTIME",
-      ["Employee", "Date", "Reason", "Undertime Hours", "Source Type", "Override"],
-      byTeam(manualUndertimes, "APP").map((item) => [
-        item.name,
-        item.date,
-        item.reason,
-        item.undertimeHours,
-        item.sourceType ?? "",
-        item.isManualOverride ? "Yes" : "No",
-      ])
-    );
-
-    addSection(
-      absenceUndertimeRows,
-      "UNASSIGNED - MANUAL UNDERTIME",
-      ["Employee", "Date", "Reason", "Undertime Hours", "Source Type", "Override"],
-      byTeam(manualUndertimes, "UNASSIGNED").map((item) => [
-        item.name,
-        item.date,
-        item.reason,
-        item.undertimeHours,
-        item.sourceType ?? "",
-        item.isManualOverride ? "Yes" : "No",
-      ])
-    );
-
-    const lateSheet = XLSX.utils.aoa_to_sheet(lateSummaryRows);
-    lateSheet["!cols"] = [
-      { wch: 34 },
-      { wch: 16 },
-      { wch: 20 },
-      { wch: 18 },
-      { wch: 18 },
-      { wch: 28 },
-    ];
-
-    const absenceSheet = XLSX.utils.aoa_to_sheet(absenceUndertimeRows);
-    absenceSheet["!cols"] = [
-      { wch: 34 },
-      { wch: 16 },
-      { wch: 35 },
-      { wch: 18 },
-      { wch: 18 },
-      { wch: 18 },
-    ];
-
-    XLSX.utils.book_append_sheet(workbook, lateSheet, "Late Summary");
-    XLSX.utils.book_append_sheet(workbook, absenceSheet, "Absence & Undertime");
-
-    const suffix =
-      selectedDayScope !== "all"
-        ? formatDayLabel(selectedDayScope)
-            .replace(/[^\w\s-]/g, "")
-            .replace(/\s+/g, "-")
-        : selectedMonthScope !== "all"
-        ? formatMonthLabel(selectedMonthScope)
-            .replace(/[^\w\s-]/g, "")
-            .replace(/\s+/g, "-")
-        : "all-records";
-
-    XLSX.writeFile(workbook, `timecore-attendance-report-${suffix}.xlsx`);
-
-    return {
-      success: true,
-      message: "Excel report exported successfully.",
-    };
-  } catch (error) {
-    console.error("Excel export failed:", error);
-
-    return {
-      success: false,
-      message: "Excel export failed. Please try again.",
-    };
-  }
-};
-
+      return {
+        success: true,
+        message: "Professional Excel report exported successfully.",
+      };
+    } catch (error) {
+      console.error("Excel export failed:", error);
+      return {
+        success: false,
+        message: "Excel export failed. Please try again.",
+      };
+    }
+  };
   return (
     <AttendanceContext.Provider
       value={{
