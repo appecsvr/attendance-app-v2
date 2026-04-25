@@ -1603,10 +1603,10 @@ const exportFilteredWorkbook = async () => {
   } catch (error) {
     console.error("Excel export failed:", error);
 
-    return {
-      success: false,
-      message: "Excel export failed. Please check your Excel template.",
-    };
+return {
+  success: false,
+  message: error instanceof Error ? error.message : "Excel export failed.",
+};
   }
 };
   return (
