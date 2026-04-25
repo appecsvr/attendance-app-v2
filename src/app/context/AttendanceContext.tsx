@@ -968,56 +968,27 @@ const exportFilteredWorkbook = async () => {
       "Yatsu, Nanako",
     ];
 
-    const APP_EMPLOYEES = [
-      "Aclan, Junrey",
-      "Azcueta, Jerwin",
-      "Bajar, Joseph",
-      "Bautista, Gerry",
-      "Bayan, Juewars",
-      "Bertulfo, Hermilo",
-      "Bido, Alonzo",
-      "Bonaobra, Davidson",
-      "Cababat, Chesterson",
-      "Caban, Cris",
-      "Calicdan, Ednerson",
-      "Campita, Justin",
-      "Clemente Jr., Ricardo",
-      "Coste, Welmar",
-      "De Jesus, Roy Rolan",
-      "Dometita, Bryan Lloyd",
-      "Escarcha, Carlito",
-      "Estuaria, Christian",
-      "Francisco, Jhon Mar",
-      "Hiteroza, Isauro",
-      "Magday, Elmer",
-      "Mapa, Arnel",
-      "Meeks, Bryan",
-      "Obligar, Bernal",
-      "Olesco, Alvin",
-      "Omapas Jr., Teddy",
-      "Omegan, Jayson",
-      "Radaza, Marifie",
-      "Samson, John Paul",
-      "Sisbas, Jessie",
-      "Soriano, Ariel",
-      "Suarez, Elmer",
-      "Urbano, Ronald",
-      "Veruela, John Wally",
-      "Zate, Mario",
-    ];
-
-    const cleanName = (name: string) =>
-      name.trim().replace(/\s+/g, " ").toLowerCase();
+const cleanName = (name: string) =>
+  name
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/\s*,\s*/g, ", ")
+    .replace(/\s*\.\s*/g, ".")
+    .replace("jr.,", "jr,")
+    .replace("jr.", "jr")
+    .replace(" ma. ", " ma ")
+    .replace(" ma,", " ma,");
 
     const waisSet = new Set(WAIS_EMPLOYEES.map(cleanName));
-    const appSet = new Set(APP_EMPLOYEES.map(cleanName));
 
-    const getTeam = (name: string) => {
-      const normalized = cleanName(name);
-      if (waisSet.has(normalized)) return "WAIS";
-      if (appSet.has(normalized)) return "APP";
-      return "UNASSIGNED";
-    };
+const getTeam = (name: string) => {
+  const normalized = cleanName(name);
+
+  if (waisSet.has(normalized)) return "WAIS";
+
+  return "APP";
+};
 
     const sortByName = <T extends { name: string }>(items: T[]) =>
       [...items].sort((a, b) => a.name.localeCompare(b.name));
