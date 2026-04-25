@@ -950,7 +950,7 @@ const exportFilteredWorkbook = async () => {
   try {
     const workbook = new ExcelJS.Workbook();
 
-    const response = await fetch("/templates/Export format.xlsx");
+  const response = await fetch("/templates/Export%20format.xlsx");
 
     if (response.ok) {
       const arrayBuffer = await response.arrayBuffer();
