@@ -946,549 +946,669 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
     );
   };
 
-  const exportFilteredWorkbook = async () => {
-    try {
-      const response = await fetch("/templates/Export format.xlsx");
+const exportFilteredWorkbook = async () => {
+  try {
+    const workbook = new ExcelJS.Workbook();
 
-      if (!response.ok) {
-        throw new Error("Excel template file was not found in public/templates.");
-      }
+    const response = await fetch("/templates/Export format.xlsx");
 
+    if (response.ok) {
       const arrayBuffer = await response.arrayBuffer();
-      const workbook = new ExcelJS.Workbook();
       await workbook.xlsx.load(arrayBuffer);
-
-      const lateSheet = workbook.getWorksheet("Late Summary");
-      const absenceSheet = workbook.getWorksheet("Absence & Undertime");
-
-      if (!lateSheet || !absenceSheet) {
-        throw new Error(
-          "Template sheets must be named 'Late Summary' and 'Absence & Undertime'."
-        );
-      }
-
-      const WAIS_EMPLOYEES = [
-        "Agravio, John Maric",
-        "Aquino, Armando",
-        "Cantillon, Ma. Louissa",
-        "Codilan, Ian Christopher",
-        "Cruz, Gino",
-        "Cruz, Nathaniel Philip",
-        "Engay, Lovely Jane",
-        "Loterte, Jenny Lyn",
-        "Pascua, Joseph",
-        "Pascual, Lucky Joy",
-        "Pesquerra, Louis Gabriel",
-        "Ramirez, Rejohn",
-        "Raquem, Karl Anthony",
-        "Tapat, Leilani",
-        "Yatsu, Nanako",
-      ];
-
-      const APP_EMPLOYEES = [
-        "Aclan, Junrey",
-        "Azcueta, Jerwin",
-        "Bajar, Joseph",
-        "Bautista, Gerry",
-        "Bayan, Juewars",
-        "Bertulfo, Hermilo",
-        "Bido, Alonzo",
-        "Bonaobra, Davidson",
-        "Cababat, Chesterson",
-        "Caban, Cris",
-        "Calicdan, Ednerson",
-        "Campita, Justin",
-        "Clemente, Ricardo Jr.",
-        "Coste, Welmar",
-        "De Jesus, Roy Rolan",
-        "Dometita, Bryan Lloyd",
-        "Escarcha, Carlito",
-        "Estuaria, Christian",
-        "Francisco, Jhon Mar",
-        "Hiteroza, Isauro",
-        "Magday, Elmer",
-        "Mapa, Arnel",
-        "Meeks, Bryan",
-        "Obligar, Bernal",
-        "Olesco, Alvin",
-        "Omapas Jr., Teddy",
-        "Omegan, Jayson",
-        "Radaza, Marifie",
-        "Samson, John Paul",
-        "Sisbas, Jessie",
-        "Soriano, Ariel",
-        "Suarez, Elmer",
-        "Urbano, Ronald",
-        "Veruela, John Wally",
-        "Zate, Mario",
-      ];
-
-      const normalizeEmployee = (name: string) =>
-        name.trim().replace(/\s+/g, " ").toLowerCase();
-
-      const waisSet = new Set(WAIS_EMPLOYEES.map(normalizeEmployee));
-      const appSet = new Set(APP_EMPLOYEES.map(normalizeEmployee));
-
-      const getTeam = (name: string) => {
-        const clean = normalizeEmployee(name);
-        if (waisSet.has(clean)) return "WAIS";
-        if (appSet.has(clean)) return "APP";
-        return "UNASSIGNED";
-      };
-
-      const sortByName = <T extends { name: string }>(items: T[]) =>
-        [...items].sort((a, b) => a.name.localeCompare(b.name));
-
-      const byTeam = <T extends { name: string }>(items: T[], team: string) =>
-        sortByName(items.filter((item) => getTeam(item.name) === team));
-
-      const totalMinutesLate = lateSummary.reduce(
-        (sum, item) => sum + item.totalMinutesLate,
-        0
-      );
-
-      const memoReviewCount = lateSummary.filter(
-        (item) => item.totalLates >= 4
-      ).length;
-
-      const reportScope =
-        selectedDayScope !== "all"
-          ? formatDayLabel(selectedDayScope)
-          : selectedMonthScope !== "all"
-          ? formatMonthLabel(selectedMonthScope)
-          : "All Records";
-
-      const generatedAt = new Date().toLocaleDateString("en-US", {
-        month: "long",
-        day: "2-digit",
-        year: "numeric",
-      });
-
-      const cloneStyle = (cell: ExcelJS.Cell) => ({
-        font: cell.font ? { ...cell.font } : undefined,
-        fill: cell.fill ? { ...cell.fill } : undefined,
-        border: cell.border ? { ...cell.border } : undefined,
-        alignment: cell.alignment ? { ...cell.alignment } : undefined,
-        numFmt: cell.numFmt,
-        protection: cell.protection ? { ...cell.protection } : undefined,
-      });
-
-      const applyStyle = (cell: ExcelJS.Cell, style: Partial<ExcelJS.Style>) => {
-        if (style.font) cell.font = style.font;
-        if (style.fill) cell.fill = style.fill;
-        if (style.border) cell.border = style.border;
-        if (style.alignment) cell.alignment = style.alignment;
-        if (style.numFmt) cell.numFmt = style.numFmt;
-        if (style.protection) cell.protection = style.protection;
-      };
-
-      const clearRange = (
-        sheet: ExcelJS.Worksheet,
-        startRow: number,
-        endRow: number,
-        startCol: number,
-        endCol: number
-      ) => {
-        for (let row = startRow; row <= endRow; row += 1) {
-          for (let col = startCol; col <= endCol; col += 1) {
-            sheet.getCell(row, col).value = null;
-          }
-        }
-      };
-
-      const writeValue = (
-        sheet: ExcelJS.Worksheet,
-        address: string,
-        value: string | number
-      ) => {
-        sheet.getCell(address).value = value;
-      };
-
-      const writeBlock = (
-        sheet: ExcelJS.Worksheet,
-        startRow: number,
-        startCol: number,
-        rows: (string | number)[][],
-        rowStyleSource: number,
-        memoStatusCol?: number
-      ) => {
-        const baseStyles = rows[0]?.map((_, index) =>
-          cloneStyle(sheet.getCell(rowStyleSource, startCol + index))
-        );
-
-        rows.forEach((row, rowIndex) => {
-          row.forEach((value, colIndex) => {
-            const cell = sheet.getCell(startRow + rowIndex, startCol + colIndex);
-            cell.value = value;
-
-            const baseStyle = baseStyles?.[colIndex];
-            if (baseStyle) applyStyle(cell, baseStyle);
-
-            if (
-              memoStatusCol &&
-              colIndex + 1 === memoStatusCol &&
-              String(value).toLowerCase().includes("memo")
-            ) {
-              cell.font = { ...(cell.font ?? {}), color: { argb: "FFC00000" } };
-              sheet.getRow(startRow + rowIndex).eachCell((rowCell) => {
-                rowCell.fill = {
-                  type: "pattern",
-                  pattern: "solid",
-                  fgColor: { argb: "FFFFF1F1" },
-                };
-              });
-            }
-          });
-        });
-      };
-
-      const writeSectionLabel = (
-        sheet: ExcelJS.Worksheet,
-        row: number,
-        col: number,
-        label: string,
-        templateRow: number,
-        templateCol: number,
-        width = 4
-      ) => {
-        for (let i = 0; i < width; i += 1) {
-          applyStyle(
-            sheet.getCell(row, col + i),
-            cloneStyle(sheet.getCell(templateRow, templateCol + i))
-          );
-        }
-        sheet.getCell(row, col).value = label;
-      };
-
-      const writeHeader = (
-        sheet: ExcelJS.Worksheet,
-        row: number,
-        col: number,
-        headers: string[],
-        templateRow: number,
-        templateCol: number
-      ) => {
-        headers.forEach((header, index) => {
-          const cell = sheet.getCell(row, col + index);
-          cell.value = header;
-          applyStyle(cell, cloneStyle(sheet.getCell(templateRow, templateCol + index)));
-        });
-      };
-
-      clearRange(lateSheet, 10, 250, 1, 12);
-      clearRange(absenceSheet, 10, 250, 1, 10);
-
-      writeValue(lateSheet, "A1", "TIMECORE HR ATTENDANCE REPORT");
-      writeValue(
-        lateSheet,
-        "D2",
-        `Late Summary / Late Records / Exemptions | Report Scope: ${reportScope} | Generated: ${generatedAt}`
-      );
-      writeValue(lateSheet, "B4", lateRecords.length);
-      writeValue(lateSheet, "F4", lateSummary.length);
-      writeValue(lateSheet, "J4", totalMinutesLate);
-      writeValue(lateSheet, "N4", memoReviewCount);
-
-      writeValue(absenceSheet, "A1", "TIMECORE HR ATTENDANCE REPORT");
-      writeValue(
-        absenceSheet,
-        "D2",
-        `Absence and Undertime Monitoring | Report Scope: ${reportScope} | Generated: ${generatedAt}`
-      );
-
-      const summaryRows = (items: LateSummary[]) =>
-        items.map((item) => [
-          item.name,
-          item.totalLates,
-          item.totalMinutesLate,
-          item.totalLates >= 4 ? "For Memo Review" : "Normal",
-        ]);
-
-      const lateRows = (items: LateRecord[]) =>
-        items.map((record) => [
-          record.name,
-          record.date,
-          record.timeIn,
-          record.minutesLate,
-          record.secondsLate,
-          record.sourceFileName,
-        ]);
-
-      const exemptionRows = (items: Exemption[]) =>
-        items.map((item) => [item.name, item.date, item.reason]);
-
-      const absenceRows = (items: AbsentRecord[]) =>
-        items.map((item) => [item.name, item.date, item.reason, "Manual Entry"]);
-
-      const systemUndertimeRows = (items: GeneratedUndertime[]) =>
-        items.map((item) => [
-          item.name,
-          item.date,
-          item.timeIn,
-          item.sourceFileName,
-        ]);
-
-      const manualUndertimeRows = (items: UndertimeRecord[]) =>
-        items.map((item) => [
-          item.name,
-          item.date,
-          item.reason,
-          item.undertimeHours,
-        ]);
-
-      let summaryRow = 10;
-      [
-        ["WAIS (ADMIN)", "WAIS", 8, 9],
-        ["APP (PRODUCTION)", "APP", 21, 22],
-        ["UNASSIGNED", "UNASSIGNED", 39, 40],
-      ].forEach(([label, team, labelTemplateRow, headerTemplateRow]) => {
-        const rows = summaryRows(byTeam(lateSummary, team as string));
-        if (summaryRow !== 10) summaryRow += 2;
-        writeSectionLabel(
-          lateSheet,
-          summaryRow - 2,
-          1,
-          label as string,
-          labelTemplateRow as number,
-          1
-        );
-        writeHeader(
-          lateSheet,
-          summaryRow - 1,
-          1,
-          ["Employee", "Total Lates", "Total Minutes Late", "Memo Status"],
-          headerTemplateRow as number,
-          1
-        );
-        writeBlock(
-          lateSheet,
-          summaryRow,
-          1,
-          rows.length ? rows : [["No data", "", "", ""]],
-          summaryRow,
-          4
-        );
-        summaryRow += Math.max(rows.length, 1);
-      });
-
-      let recordRow = 10;
-      [
-        ["WAIS (ADMIN)", "WAIS", 8, 9],
-        ["APP (PRODUCTION)", "APP", 21, 22],
-        ["UNASSIGNED", "UNASSIGNED", 39, 40],
-      ].forEach(([label, team, labelTemplateRow, headerTemplateRow]) => {
-        const rows = lateRows(byTeam(lateRecords, team as string));
-        if (recordRow !== 10) recordRow += 2;
-        writeSectionLabel(
-          lateSheet,
-          recordRow - 2,
-          7,
-          label as string,
-          labelTemplateRow as number,
-          7,
-          6
-        );
-        writeHeader(
-          lateSheet,
-          recordRow - 1,
-          7,
-          ["Employee", "Date", "Time In", "Minutes Late", "Seconds Late", "Source File"],
-          headerTemplateRow as number,
-          7
-        );
-        writeBlock(
-          lateSheet,
-          recordRow,
-          7,
-          rows.length ? rows : [["No data", "", "", "", "", ""]],
-          recordRow
-        );
-        recordRow += Math.max(rows.length, 1);
-      });
-
-      let exemptionRow = Math.max(summaryRow, recordRow) + 3;
-      writeSectionLabel(lateSheet, exemptionRow, 1, "EXEMPTIONS", 7, 1, 4);
-      exemptionRow += 2;
-      [
-        ["WAIS (ADMIN)", "WAIS", 8, 9],
-        ["APP (PRODUCTION)", "APP", 21, 22],
-        ["UNASSIGNED", "UNASSIGNED", 39, 40],
-      ].forEach(([label, team, labelTemplateRow, headerTemplateRow]) => {
-        const rows = exemptionRows(byTeam(exemptions, team as string));
-        writeSectionLabel(
-          lateSheet,
-          exemptionRow,
-          1,
-          label as string,
-          labelTemplateRow as number,
-          1,
-          3
-        );
-        writeHeader(
-          lateSheet,
-          exemptionRow + 1,
-          1,
-          ["Employee", "Date", "Reason"],
-          headerTemplateRow as number,
-          1
-        );
-        writeBlock(
-          lateSheet,
-          exemptionRow + 2,
-          1,
-          rows.length ? rows : [["No data", "", ""]],
-          exemptionRow + 2
-        );
-        exemptionRow += Math.max(rows.length, 1) + 4;
-      });
-
-      let absenceRow = 10;
-      [
-        ["WAIS (ADMIN)", "WAIS", 8, 9],
-        ["APP (PRODUCTION)", "APP", 12, 13],
-        ["UNASSIGNED", "UNASSIGNED", 23, 24],
-      ].forEach(([label, team, labelTemplateRow, headerTemplateRow]) => {
-        const rows = absenceRows(byTeam(absences, team as string));
-        if (absenceRow !== 10) absenceRow += 2;
-        writeSectionLabel(
-          absenceSheet,
-          absenceRow - 2,
-          1,
-          label as string,
-          labelTemplateRow as number,
-          1,
-          4
-        );
-        writeHeader(
-          absenceSheet,
-          absenceRow - 1,
-          1,
-          ["Employee", "Date", "Reason", "Source"],
-          headerTemplateRow as number,
-          1
-        );
-        writeBlock(
-          absenceSheet,
-          absenceRow,
-          1,
-          rows.length ? rows : [["No data", "", "", ""]],
-          absenceRow
-        );
-        absenceRow += Math.max(rows.length, 1);
-      });
-
-      let systemRow = 10;
-      [
-        ["WAIS (ADMIN)", "WAIS", 8, 9],
-        ["APP (PRODUCTION)", "APP", 12, 13],
-        ["UNASSIGNED", "UNASSIGNED", 23, 24],
-      ].forEach(([label, team, labelTemplateRow, headerTemplateRow]) => {
-        const rows = systemUndertimeRows(byTeam(generatedUndertimes, team as string));
-        if (systemRow !== 10) systemRow += 2;
-        writeSectionLabel(
-          absenceSheet,
-          systemRow - 2,
-          6,
-          label as string,
-          labelTemplateRow as number,
-          6,
-          4
-        );
-        writeHeader(
-          absenceSheet,
-          systemRow - 1,
-          6,
-          ["Employee", "Date", "Time In", "Source File"],
-          headerTemplateRow as number,
-          6
-        );
-        writeBlock(
-          absenceSheet,
-          systemRow,
-          6,
-          rows.length ? rows : [["No data", "", "", ""]],
-          systemRow
-        );
-        systemRow += Math.max(rows.length, 1);
-      });
-
-      let manualRow = Math.max(absenceRow, systemRow) + 3;
-      writeSectionLabel(absenceSheet, manualRow, 1, "MANUAL UNDERTIME BY HR", 18, 1, 4);
-      manualRow += 2;
-      [
-        ["WAIS (ADMIN)", "WAIS", 19, 20],
-        ["APP (PRODUCTION)", "APP", 23, 24],
-        ["UNASSIGNED", "UNASSIGNED", 23, 24],
-      ].forEach(([label, team, labelTemplateRow, headerTemplateRow]) => {
-        const rows = manualUndertimeRows(byTeam(manualUndertimes, team as string));
-        writeSectionLabel(
-          absenceSheet,
-          manualRow,
-          1,
-          label as string,
-          labelTemplateRow as number,
-          1,
-          4
-        );
-        writeHeader(
-          absenceSheet,
-          manualRow + 1,
-          1,
-          ["Employee", "Date", "Reason", "Hours"],
-          headerTemplateRow as number,
-          1
-        );
-        writeBlock(
-          absenceSheet,
-          manualRow + 2,
-          1,
-          rows.length ? rows : [["No data", "", "", ""]],
-          manualRow + 2
-        );
-        manualRow += Math.max(rows.length, 1) + 4;
-      });
-
-      workbook.creator = "TimeCore HR Attendance System";
-      workbook.created = new Date();
-      workbook.modified = new Date();
-
-      const buffer = await workbook.xlsx.writeBuffer();
-      const blob = new Blob([buffer], {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      });
-
-      const suffix =
-        selectedDayScope !== "all"
-          ? formatDayLabel(selectedDayScope)
-              .replace(/[^\w\s-]/g, "")
-              .replace(/\s+/g, "-")
-          : selectedMonthScope !== "all"
-          ? formatMonthLabel(selectedMonthScope)
-              .replace(/[^\w\s-]/g, "")
-              .replace(/\s+/g, "-")
-          : "all-records";
-
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = `timecore-attendance-report-${suffix}.xlsx`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(link.href);
-
-      return {
-        success: true,
-        message: "Professional Excel report exported successfully.",
-      };
-    } catch (error) {
-      console.error("Excel export failed:", error);
-
-      return {
-        success: false,
-        message: "Excel export failed. Please check your Excel template.",
-      };
     }
-  };
+
+    const lateSheet =
+      workbook.getWorksheet("Late Summary") || workbook.addWorksheet("Late Summary");
+
+    const absenceSheet =
+      workbook.getWorksheet("Absence & Undertime") ||
+      workbook.addWorksheet("Absence & Undertime");
+
+    const clearSheet = (sheet: ExcelJS.Worksheet) => {
+      if (sheet.rowCount > 0) {
+        sheet.spliceRows(1, sheet.rowCount);
+      }
+    };
+
+    clearSheet(lateSheet);
+    clearSheet(absenceSheet);
+
+    const WAIS_EMPLOYEES = [
+      "Agravio, John Maric",
+      "Aquino, Armando",
+      "Cantillon, Ma. Louissa",
+      "Codilan, Ian Christopher",
+      "Cruz, Gino",
+      "Cruz, Nathaniel Philip",
+      "Engay, Lovely Jane",
+      "Loterte, Jenny Lyn",
+      "Pascua, Joseph",
+      "Pascual, Lucky Joy",
+      "Pesquerra, Louis Gabriel",
+      "Ramirez, Rejohn",
+      "Raquem, Karl Anthony",
+      "Tapat, Leilani",
+      "Yatsu, Nanako",
+    ];
+
+    const APP_EMPLOYEES = [
+      "Aclan, Junrey",
+      "Azcueta, Jerwin",
+      "Bajar, Joseph",
+      "Bautista, Gerry",
+      "Bayan, Juewars",
+      "Bertulfo, Hermilo",
+      "Bido, Alonzo",
+      "Bonaobra, Davidson",
+      "Cababat, Chesterson",
+      "Caban, Cris",
+      "Calicdan, Ednerson",
+      "Campita, Justin",
+      "Clemente, Ricardo Jr.",
+      "Coste, Welmar",
+      "De Jesus, Roy Rolan",
+      "Dometita, Bryan Lloyd",
+      "Escarcha, Carlito",
+      "Estuaria, Christian",
+      "Francisco, Jhon Mar",
+      "Hiteroza, Isauro",
+      "Magday, Elmer",
+      "Mapa, Arnel",
+      "Meeks, Bryan",
+      "Obligar, Bernal",
+      "Olesco, Alvin",
+      "Omapas Jr., Teddy",
+      "Omegan, Jayson",
+      "Radaza, Marifie",
+      "Samson, John Paul",
+      "Sisbas, Jessie",
+      "Soriano, Ariel",
+      "Suarez, Elmer",
+      "Urbano, Ronald",
+      "Veruela, John Wally",
+      "Zate, Mario",
+    ];
+
+    const cleanName = (name: string) =>
+      name.trim().replace(/\s+/g, " ").toLowerCase();
+
+    const waisSet = new Set(WAIS_EMPLOYEES.map(cleanName));
+    const appSet = new Set(APP_EMPLOYEES.map(cleanName));
+
+    const getTeam = (name: string) => {
+      const normalized = cleanName(name);
+      if (waisSet.has(normalized)) return "WAIS";
+      if (appSet.has(normalized)) return "APP";
+      return "UNASSIGNED";
+    };
+
+    const sortByName = <T extends { name: string }>(items: T[]) =>
+      [...items].sort((a, b) => a.name.localeCompare(b.name));
+
+    const byTeam = <T extends { name: string }>(items: T[], team: string) =>
+      sortByName(items.filter((item) => getTeam(item.name) === team));
+
+    const reportScope =
+      selectedDayScope !== "all"
+        ? formatDayLabel(selectedDayScope)
+        : selectedMonthScope !== "all"
+        ? formatMonthLabel(selectedMonthScope)
+        : "All Records";
+
+    const generatedDate = new Date().toLocaleDateString("en-US", {
+      month: "long",
+      day: "2-digit",
+      year: "numeric",
+    });
+
+    const totalMinutesLate = lateSummary.reduce(
+      (sum, item) => sum + item.totalMinutesLate,
+      0
+    );
+
+    const memoReviewCount = lateSummary.filter(
+      (item) => item.totalLates >= 4
+    ).length;
+
+    const fills = {
+      title: "F8FBFF",
+      section: "EAF1F8",
+      wais: "DDF3FF",
+      app: "E8FFF3",
+      unassigned: "FFF2CC",
+      header: "26364A",
+      memo: "FDECEC",
+      white: "FFFFFF",
+      cardBlue: "EAF3FF",
+      cardGreen: "E9FFF1",
+      cardYellow: "FFF8DD",
+      cardRed: "FDECEC",
+    };
+
+    const border = {
+      top: { style: "thin" as const, color: { argb: "E5E7EB" } },
+      left: { style: "thin" as const, color: { argb: "E5E7EB" } },
+      bottom: { style: "thin" as const, color: { argb: "E5E7EB" } },
+      right: { style: "thin" as const, color: { argb: "E5E7EB" } },
+    };
+
+    const setFill = (cell: ExcelJS.Cell, color: string) => {
+      cell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: color },
+      };
+    };
+
+    const setupSheet = (
+      sheet: ExcelJS.Worksheet,
+      title: string,
+      subtitle: string
+    ) => {
+      sheet.views = [{ showGridLines: false }];
+
+      sheet.columns = [
+        { width: 28 },
+        { width: 14 },
+        { width: 18 },
+        { width: 18 },
+        { width: 4 },
+        { width: 28 },
+        { width: 14 },
+        { width: 14 },
+        { width: 14 },
+        { width: 14 },
+        { width: 22 },
+      ];
+
+      sheet.mergeCells("A1:K1");
+      sheet.getCell("A1").value = title;
+      sheet.getCell("A1").font = {
+        name: "Arial",
+        size: 16,
+        bold: true,
+        color: { argb: "111827" },
+      };
+      sheet.getCell("A1").alignment = {
+        horizontal: "center",
+        vertical: "middle",
+      };
+      setFill(sheet.getCell("A1"), fills.title);
+
+      sheet.mergeCells("A2:K2");
+      sheet.getCell("A2").value = subtitle;
+      sheet.getCell("A2").font = {
+        name: "Arial",
+        size: 9,
+        color: { argb: "334155" },
+      };
+      sheet.getCell("A2").alignment = {
+        horizontal: "center",
+        vertical: "middle",
+      };
+      setFill(sheet.getCell("A2"), fills.title);
+
+      sheet.getRow(1).height = 24;
+      sheet.getRow(2).height = 20;
+    };
+
+    const setCard = (
+      sheet: ExcelJS.Worksheet,
+      range: string,
+      label: string,
+      value: string | number,
+      fill: string,
+      fontColor = "111827"
+    ) => {
+      sheet.mergeCells(range);
+      const cell = sheet.getCell(range.split(":")[0]);
+      cell.value = `${label}     ${value}`;
+      cell.font = {
+        name: "Arial",
+        size: 10,
+        bold: true,
+        color: { argb: fontColor },
+      };
+      cell.alignment = {
+        horizontal: "center",
+        vertical: "middle",
+      };
+      setFill(cell, fill);
+    };
+
+    const styleSectionTitle = (
+      sheet: ExcelJS.Worksheet,
+      row: number,
+      startCol: number,
+      endCol: number,
+      title: string
+    ) => {
+      sheet.mergeCells(row, startCol, row, endCol);
+      const cell = sheet.getCell(row, startCol);
+      cell.value = title;
+      cell.font = {
+        name: "Arial",
+        size: 10,
+        bold: true,
+        color: { argb: "111827" },
+      };
+      cell.alignment = {
+        horizontal: "left",
+        vertical: "middle",
+      };
+      setFill(cell, fills.section);
+    };
+
+    const styleTeamLabel = (
+      sheet: ExcelJS.Worksheet,
+      row: number,
+      startCol: number,
+      endCol: number,
+      label: string,
+      team: string
+    ) => {
+      sheet.mergeCells(row, startCol, row, endCol);
+      const cell = sheet.getCell(row, startCol);
+      cell.value = label;
+      cell.font = {
+        name: "Arial",
+        size: 10,
+        bold: true,
+        color: { argb: team === "UNASSIGNED" ? "C2410C" : "0070C0" },
+      };
+      cell.alignment = {
+        horizontal: "left",
+        vertical: "middle",
+      };
+
+      setFill(
+        cell,
+        team === "WAIS"
+          ? fills.wais
+          : team === "APP"
+          ? fills.app
+          : fills.unassigned
+      );
+    };
+
+    const writeHeader = (
+      sheet: ExcelJS.Worksheet,
+      row: number,
+      startCol: number,
+      headers: string[]
+    ) => {
+      headers.forEach((header, index) => {
+        const cell = sheet.getCell(row, startCol + index);
+        cell.value = header;
+        cell.font = {
+          name: "Arial",
+          size: 9,
+          bold: true,
+          color: { argb: "FFFFFF" },
+        };
+        cell.alignment = {
+          horizontal: "center",
+          vertical: "middle",
+        };
+        cell.border = border;
+        setFill(cell, fills.header);
+      });
+    };
+
+    const writeDataRows = (
+      sheet: ExcelJS.Worksheet,
+      startRow: number,
+      startCol: number,
+      rows: (string | number)[][],
+      memoColumnIndex?: number
+    ) => {
+      const dataRows = rows.length ? rows : [["No data"]];
+
+      dataRows.forEach((rowData, rowIndex) => {
+        const excelRow = startRow + rowIndex;
+        const isMemo =
+          memoColumnIndex !== undefined &&
+          String(rowData[memoColumnIndex] ?? "")
+            .toLowerCase()
+            .includes("memo");
+
+        rowData.forEach((value, colIndex) => {
+          const cell = sheet.getCell(excelRow, startCol + colIndex);
+          cell.value = value;
+
+          cell.font = {
+            name: "Arial",
+            size: 9,
+            bold: colIndex === 0,
+            color: { argb: isMemo ? "C00000" : "111827" },
+          };
+
+          cell.alignment = {
+            horizontal: colIndex === 0 ? "left" : "center",
+            vertical: "middle",
+          };
+
+          cell.border = border;
+
+          if (isMemo) {
+            setFill(cell, fills.memo);
+          } else {
+            setFill(cell, fills.white);
+          }
+        });
+      });
+
+      return startRow + dataRows.length;
+    };
+
+    const writeGroupedTable = (
+      sheet: ExcelJS.Worksheet,
+      startRow: number,
+      startCol: number,
+      endCol: number,
+      mainTitle: string,
+      headers: string[],
+      groups: {
+        label: string;
+        team: string;
+        rows: (string | number)[][];
+        memoColumnIndex?: number;
+      }[]
+    ) => {
+      let row = startRow;
+
+      styleSectionTitle(sheet, row, startCol, endCol, mainTitle);
+      row += 1;
+
+      groups.forEach((group, index) => {
+        if (index > 0) row += 1;
+
+        styleTeamLabel(sheet, row, startCol, endCol, group.label, group.team);
+        row += 1;
+
+        writeHeader(sheet, row, startCol, headers);
+        row += 1;
+
+        row = writeDataRows(
+          sheet,
+          row,
+          startCol,
+          group.rows,
+          group.memoColumnIndex
+        );
+
+        row += 1;
+      });
+
+      return row;
+    };
+
+    const summaryRows = (items: LateSummary[]) =>
+      items.map((item) => [
+        item.name,
+        item.totalLates,
+        item.totalMinutesLate,
+        item.totalLates >= 4 ? "For Memo Review" : "Normal",
+      ]);
+
+    const lateRows = (items: LateRecord[]) =>
+      items.map((item) => [
+        item.name,
+        item.date,
+        item.timeIn,
+        item.minutesLate,
+        item.secondsLate,
+        item.sourceFileName,
+      ]);
+
+    const exemptionRows = (items: Exemption[]) =>
+      items.map((item) => [item.name, item.date, item.reason]);
+
+    const absenceRows = (items: AbsentRecord[]) =>
+      items.map((item) => [item.name, item.date, item.reason, "Manual"]);
+
+    const systemUndertimeRows = (items: GeneratedUndertime[]) =>
+      items.map((item) => [
+        item.name,
+        item.date,
+        item.timeIn,
+        item.sourceFileName,
+      ]);
+
+    const manualUndertimeRows = (items: UndertimeRecord[]) =>
+      items.map((item) => [
+        item.name,
+        item.date,
+        item.reason,
+        item.undertimeHours,
+      ]);
+
+    setupSheet(
+      lateSheet,
+      "TIMECORE HR ATTENDANCE REPORT",
+      `Late Summary / Late Records / Exemptions  |  Report Scope: ${reportScope}  |  Generated: ${generatedDate}`
+    );
+
+    setCard(lateSheet, "A4:B4", "Late Records", lateRecords.length, fills.cardBlue, "0057D9");
+    setCard(lateSheet, "D4:E4", "Employees with Lates", lateSummary.length, fills.cardGreen, "008037");
+    setCard(lateSheet, "G4:H4", "Total Minutes Late", totalMinutesLate, fills.cardYellow, "9A5B00");
+    setCard(lateSheet, "J4:K4", "For Memo Review", memoReviewCount, fills.cardRed, "C00000");
+
+    const summaryEndRow = writeGroupedTable(
+      lateSheet,
+      7,
+      1,
+      4,
+      "LATE SUMMARY BY HR",
+      ["Employee", "Total Lates", "Total Minutes Late", "Memo Status"],
+      [
+        {
+          label: "WAIS (ADMIN)",
+          team: "WAIS",
+          rows: summaryRows(byTeam(lateSummary, "WAIS")),
+          memoColumnIndex: 3,
+        },
+        {
+          label: "APP (PRODUCTION)",
+          team: "APP",
+          rows: summaryRows(byTeam(lateSummary, "APP")),
+          memoColumnIndex: 3,
+        },
+        {
+          label: "UNASSIGNED",
+          team: "UNASSIGNED",
+          rows: summaryRows(byTeam(lateSummary, "UNASSIGNED")),
+          memoColumnIndex: 3,
+        },
+      ]
+    );
+
+    const lateRecordsEndRow = writeGroupedTable(
+      lateSheet,
+      7,
+      6,
+      11,
+      "LATE RECORDS BY HR",
+      ["Employee", "Date", "Time In", "Minutes Late", "Seconds Late", "Source File"],
+      [
+        {
+          label: "WAIS (ADMIN)",
+          team: "WAIS",
+          rows: lateRows(byTeam(lateRecords, "WAIS")),
+        },
+        {
+          label: "APP (PRODUCTION)",
+          team: "APP",
+          rows: lateRows(byTeam(lateRecords, "APP")),
+        },
+        {
+          label: "UNASSIGNED",
+          team: "UNASSIGNED",
+          rows: lateRows(byTeam(lateRecords, "UNASSIGNED")),
+        },
+      ]
+    );
+
+    const exemptionStartRow = Math.max(summaryEndRow, lateRecordsEndRow) + 2;
+
+    writeGroupedTable(
+      lateSheet,
+      exemptionStartRow,
+      1,
+      4,
+      "EXEMPTIONS BY HR",
+      ["Employee", "Date", "Reason"],
+      [
+        {
+          label: "WAIS (ADMIN)",
+          team: "WAIS",
+          rows: exemptionRows(byTeam(exemptions, "WAIS")),
+        },
+        {
+          label: "APP (PRODUCTION)",
+          team: "APP",
+          rows: exemptionRows(byTeam(exemptions, "APP")),
+        },
+        {
+          label: "UNASSIGNED",
+          team: "UNASSIGNED",
+          rows: exemptionRows(byTeam(exemptions, "UNASSIGNED")),
+        },
+      ]
+    );
+
+    setupSheet(
+      absenceSheet,
+      "TIMECORE HR ATTENDANCE REPORT",
+      `Absence and Undertime Monitoring  |  Report Scope: ${reportScope}  |  Generated: ${generatedDate}`
+    );
+
+    setCard(absenceSheet, "A4:B4", "Absences", absences.length, fills.cardBlue, "0057D9");
+    setCard(absenceSheet, "D4:E4", "System Undertime", generatedUndertimes.length, fills.cardGreen, "008037");
+    setCard(absenceSheet, "G4:H4", "Manual Undertime", manualUndertimes.length, fills.cardYellow, "9A5B00");
+
+    const absenceEndRow = writeGroupedTable(
+      absenceSheet,
+      7,
+      1,
+      4,
+      "ABSENCES BY HR",
+      ["Employee", "Date", "Reason", "Source"],
+      [
+        {
+          label: "WAIS (ADMIN)",
+          team: "WAIS",
+          rows: absenceRows(byTeam(absences, "WAIS")),
+        },
+        {
+          label: "APP (PRODUCTION)",
+          team: "APP",
+          rows: absenceRows(byTeam(absences, "APP")),
+        },
+        {
+          label: "UNASSIGNED",
+          team: "UNASSIGNED",
+          rows: absenceRows(byTeam(absences, "UNASSIGNED")),
+        },
+      ]
+    );
+
+    const systemEndRow = writeGroupedTable(
+      absenceSheet,
+      7,
+      6,
+      9,
+      "SYSTEM UNDERTIME BY HR",
+      ["Employee", "Date", "Time In", "Source File"],
+      [
+        {
+          label: "WAIS (ADMIN)",
+          team: "WAIS",
+          rows: systemUndertimeRows(byTeam(generatedUndertimes, "WAIS")),
+        },
+        {
+          label: "APP (PRODUCTION)",
+          team: "APP",
+          rows: systemUndertimeRows(byTeam(generatedUndertimes, "APP")),
+        },
+        {
+          label: "UNASSIGNED",
+          team: "UNASSIGNED",
+          rows: systemUndertimeRows(byTeam(generatedUndertimes, "UNASSIGNED")),
+        },
+      ]
+    );
+
+    const manualStartRow = Math.max(absenceEndRow, systemEndRow) + 2;
+
+    writeGroupedTable(
+      absenceSheet,
+      manualStartRow,
+      1,
+      4,
+      "MANUAL UNDERTIME BY HR",
+      ["Employee", "Date", "Reason", "Hours"],
+      [
+        {
+          label: "WAIS (ADMIN)",
+          team: "WAIS",
+          rows: manualUndertimeRows(byTeam(manualUndertimes, "WAIS")),
+        },
+        {
+          label: "APP (PRODUCTION)",
+          team: "APP",
+          rows: manualUndertimeRows(byTeam(manualUndertimes, "APP")),
+        },
+        {
+          label: "UNASSIGNED",
+          team: "UNASSIGNED",
+          rows: manualUndertimeRows(byTeam(manualUndertimes, "UNASSIGNED")),
+        },
+      ]
+    );
+
+    workbook.creator = "TimeCore HR Attendance System";
+    workbook.created = new Date();
+    workbook.modified = new Date();
+
+    const buffer = await workbook.xlsx.writeBuffer();
+
+    const blob = new Blob([buffer as BlobPart], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+
+    const suffix =
+      selectedDayScope !== "all"
+        ? formatDayLabel(selectedDayScope)
+            .replace(/[^\w\s-]/g, "")
+            .replace(/\s+/g, "-")
+        : selectedMonthScope !== "all"
+        ? formatMonthLabel(selectedMonthScope)
+            .replace(/[^\w\s-]/g, "")
+            .replace(/\s+/g, "-")
+        : "all-records";
+
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `timecore-attendance-report-${suffix}.xlsx`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+
+    return {
+      success: true,
+      message: "Professional Excel report exported successfully.",
+    };
+  } catch (error) {
+    console.error("Excel export failed:", error);
+
+    return {
+      success: false,
+      message: "Excel export failed. Please check your Excel template.",
+    };
+  }
+};
   return (
     <AttendanceContext.Provider
       value={{
