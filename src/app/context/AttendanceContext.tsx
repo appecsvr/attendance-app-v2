@@ -950,29 +950,6 @@ const exportFilteredWorkbook = async () => {
   try {
     const workbook = new ExcelJS.Workbook();
 
-  const response = await fetch("/templates/Export%20format.xlsx");
-
-    if (response.ok) {
-      const arrayBuffer = await response.arrayBuffer();
-      await workbook.xlsx.load(arrayBuffer);
-    }
-
-    const lateSheet =
-      workbook.getWorksheet("Late Summary") || workbook.addWorksheet("Late Summary");
-
-    const absenceSheet =
-      workbook.getWorksheet("Absence & Undertime") ||
-      workbook.addWorksheet("Absence & Undertime");
-
-    const clearSheet = (sheet: ExcelJS.Worksheet) => {
-      if (sheet.rowCount > 0) {
-        sheet.spliceRows(1, sheet.rowCount);
-      }
-    };
-
-    clearSheet(lateSheet);
-    clearSheet(absenceSheet);
-
     const WAIS_EMPLOYEES = [
       "Agravio, John Maric",
       "Aquino, Armando",
@@ -1070,7 +1047,7 @@ const exportFilteredWorkbook = async () => {
       (item) => item.totalLates >= 4
     ).length;
 
-    const fills = {
+    const colors = {
       title: "F8FBFF",
       section: "EAF1F8",
       wais: "DDF3FF",
@@ -1079,25 +1056,35 @@ const exportFilteredWorkbook = async () => {
       header: "26364A",
       memo: "FDECEC",
       white: "FFFFFF",
-      cardBlue: "EAF3FF",
-      cardGreen: "E9FFF1",
-      cardYellow: "FFF8DD",
-      cardRed: "FDECEC",
+      blueCard: "EAF3FF",
+      greenCard: "E9FFF1",
+      yellowCard: "FFF8DD",
+      redCard: "FDECEC",
     };
 
-    const border = {
+    const thinBorder = {
       top: { style: "thin" as const, color: { argb: "E5E7EB" } },
       left: { style: "thin" as const, color: { argb: "E5E7EB" } },
       bottom: { style: "thin" as const, color: { argb: "E5E7EB" } },
       right: { style: "thin" as const, color: { argb: "E5E7EB" } },
     };
 
-    const setFill = (cell: ExcelJS.Cell, color: string) => {
+    const fill = (cell: ExcelJS.Cell, color: string) => {
       cell.fill = {
         type: "pattern",
         pattern: "solid",
         fgColor: { argb: color },
       };
+    };
+
+    const merge = (
+      sheet: ExcelJS.Worksheet,
+      startRow: number,
+      startCol: number,
+      endRow: number,
+      endCol: number
+    ) => {
+      sheet.mergeCells(startRow, startCol, endRow, endCol);
     };
 
     const setupSheet = (
@@ -1108,12 +1095,12 @@ const exportFilteredWorkbook = async () => {
       sheet.views = [{ showGridLines: false }];
 
       sheet.columns = [
-        { width: 28 },
+        { width: 30 },
         { width: 14 },
         { width: 18 },
         { width: 18 },
         { width: 4 },
-        { width: 28 },
+        { width: 30 },
         { width: 14 },
         { width: 14 },
         { width: 14 },
@@ -1121,7 +1108,7 @@ const exportFilteredWorkbook = async () => {
         { width: 22 },
       ];
 
-      sheet.mergeCells("A1:K1");
+      merge(sheet, 1, 1, 1, 11);
       sheet.getCell("A1").value = title;
       sheet.getCell("A1").font = {
         name: "Arial",
@@ -1133,9 +1120,9 @@ const exportFilteredWorkbook = async () => {
         horizontal: "center",
         vertical: "middle",
       };
-      setFill(sheet.getCell("A1"), fills.title);
+      fill(sheet.getCell("A1"), colors.title);
 
-      sheet.mergeCells("A2:K2");
+      merge(sheet, 2, 1, 2, 11);
       sheet.getCell("A2").value = subtitle;
       sheet.getCell("A2").font = {
         name: "Arial",
@@ -1146,7 +1133,7 @@ const exportFilteredWorkbook = async () => {
         horizontal: "center",
         vertical: "middle",
       };
-      setFill(sheet.getCell("A2"), fills.title);
+      fill(sheet.getCell("A2"), colors.title);
 
       sheet.getRow(1).height = 24;
       sheet.getRow(2).height = 20;
@@ -1154,15 +1141,17 @@ const exportFilteredWorkbook = async () => {
 
     const setCard = (
       sheet: ExcelJS.Worksheet,
-      range: string,
+      row: number,
+      startCol: number,
+      endCol: number,
       label: string,
       value: string | number,
-      fill: string,
-      fontColor = "111827"
+      bgColor: string,
+      fontColor: string
     ) => {
-      sheet.mergeCells(range);
-      const cell = sheet.getCell(range.split(":")[0]);
-      cell.value = `${label}     ${value}`;
+      merge(sheet, row, startCol, row, endCol);
+      const cell = sheet.getCell(row, startCol);
+      cell.value = `${label}        ${value}`;
       cell.font = {
         name: "Arial",
         size: 10,
@@ -1173,17 +1162,17 @@ const exportFilteredWorkbook = async () => {
         horizontal: "center",
         vertical: "middle",
       };
-      setFill(cell, fill);
+      fill(cell, bgColor);
     };
 
-    const styleSectionTitle = (
+    const sectionTitle = (
       sheet: ExcelJS.Worksheet,
       row: number,
       startCol: number,
       endCol: number,
       title: string
     ) => {
-      sheet.mergeCells(row, startCol, row, endCol);
+      merge(sheet, row, startCol, row, endCol);
       const cell = sheet.getCell(row, startCol);
       cell.value = title;
       cell.font = {
@@ -1196,10 +1185,10 @@ const exportFilteredWorkbook = async () => {
         horizontal: "left",
         vertical: "middle",
       };
-      setFill(cell, fills.section);
+      fill(cell, colors.section);
     };
 
-    const styleTeamLabel = (
+    const teamLabel = (
       sheet: ExcelJS.Worksheet,
       row: number,
       startCol: number,
@@ -1207,7 +1196,7 @@ const exportFilteredWorkbook = async () => {
       label: string,
       team: string
     ) => {
-      sheet.mergeCells(row, startCol, row, endCol);
+      merge(sheet, row, startCol, row, endCol);
       const cell = sheet.getCell(row, startCol);
       cell.value = label;
       cell.font = {
@@ -1220,18 +1209,17 @@ const exportFilteredWorkbook = async () => {
         horizontal: "left",
         vertical: "middle",
       };
-
-      setFill(
+      fill(
         cell,
         team === "WAIS"
-          ? fills.wais
+          ? colors.wais
           : team === "APP"
-          ? fills.app
-          : fills.unassigned
+          ? colors.app
+          : colors.unassigned
       );
     };
 
-    const writeHeader = (
+    const headerRow = (
       sheet: ExcelJS.Worksheet,
       row: number,
       startCol: number,
@@ -1250,63 +1238,60 @@ const exportFilteredWorkbook = async () => {
           horizontal: "center",
           vertical: "middle",
         };
-        cell.border = border;
-        setFill(cell, fills.header);
+        cell.border = thinBorder;
+        fill(cell, colors.header);
       });
     };
 
-    const writeDataRows = (
+    const dataRows = (
       sheet: ExcelJS.Worksheet,
       startRow: number,
       startCol: number,
       rows: (string | number)[][],
       memoColumnIndex?: number
     ) => {
-      const dataRows = rows.length ? rows : [["No data"]];
+      const finalRows = rows.length ? rows : [["No data"]];
+      let row = startRow;
 
-      dataRows.forEach((rowData, rowIndex) => {
-        const excelRow = startRow + rowIndex;
+      finalRows.forEach((rowData) => {
         const isMemo =
           memoColumnIndex !== undefined &&
           String(rowData[memoColumnIndex] ?? "")
             .toLowerCase()
             .includes("memo");
 
-        rowData.forEach((value, colIndex) => {
-          const cell = sheet.getCell(excelRow, startCol + colIndex);
+        rowData.forEach((value, index) => {
+          const cell = sheet.getCell(row, startCol + index);
           cell.value = value;
 
           cell.font = {
             name: "Arial",
             size: 9,
-            bold: colIndex === 0,
+            bold: index === 0,
             color: { argb: isMemo ? "C00000" : "111827" },
           };
 
           cell.alignment = {
-            horizontal: colIndex === 0 ? "left" : "center",
+            horizontal: index === 0 ? "left" : "center",
             vertical: "middle",
           };
 
-          cell.border = border;
-
-          if (isMemo) {
-            setFill(cell, fills.memo);
-          } else {
-            setFill(cell, fills.white);
-          }
+          cell.border = thinBorder;
+          fill(cell, isMemo ? colors.memo : colors.white);
         });
+
+        row += 1;
       });
 
-      return startRow + dataRows.length;
+      return row;
     };
 
-    const writeGroupedTable = (
+    const groupedTable = (
       sheet: ExcelJS.Worksheet,
       startRow: number,
       startCol: number,
       endCol: number,
-      mainTitle: string,
+      title: string,
       headers: string[],
       groups: {
         label: string;
@@ -1317,19 +1302,19 @@ const exportFilteredWorkbook = async () => {
     ) => {
       let row = startRow;
 
-      styleSectionTitle(sheet, row, startCol, endCol, mainTitle);
+      sectionTitle(sheet, row, startCol, endCol, title);
       row += 1;
 
       groups.forEach((group, index) => {
-        if (index > 0) row += 1;
+        if (index > 0) row += 2;
 
-        styleTeamLabel(sheet, row, startCol, endCol, group.label, group.team);
+        teamLabel(sheet, row, startCol, endCol, group.label, group.team);
         row += 1;
 
-        writeHeader(sheet, row, startCol, headers);
+        headerRow(sheet, row, startCol, headers);
         row += 1;
 
-        row = writeDataRows(
+        row = dataRows(
           sheet,
           row,
           startCol,
@@ -1383,18 +1368,21 @@ const exportFilteredWorkbook = async () => {
         item.undertimeHours,
       ]);
 
+    const lateSheet = workbook.addWorksheet("Late Summary");
+    const absenceSheet = workbook.addWorksheet("Absence & Undertime");
+
     setupSheet(
       lateSheet,
       "TIMECORE HR ATTENDANCE REPORT",
       `Late Summary / Late Records / Exemptions  |  Report Scope: ${reportScope}  |  Generated: ${generatedDate}`
     );
 
-    setCard(lateSheet, "A4:B4", "Late Records", lateRecords.length, fills.cardBlue, "0057D9");
-    setCard(lateSheet, "D4:E4", "Employees with Lates", lateSummary.length, fills.cardGreen, "008037");
-    setCard(lateSheet, "G4:H4", "Total Minutes Late", totalMinutesLate, fills.cardYellow, "9A5B00");
-    setCard(lateSheet, "J4:K4", "For Memo Review", memoReviewCount, fills.cardRed, "C00000");
+    setCard(lateSheet, 4, 1, 2, "Late Records", lateRecords.length, colors.blueCard, "0057D9");
+    setCard(lateSheet, 4, 4, 5, "Employees with Lates", lateSummary.length, colors.greenCard, "008037");
+    setCard(lateSheet, 4, 7, 8, "Total Minutes Late", totalMinutesLate, colors.yellowCard, "9A5B00");
+    setCard(lateSheet, 4, 10, 11, "For Memo Review", memoReviewCount, colors.redCard, "C00000");
 
-    const summaryEndRow = writeGroupedTable(
+    const summaryEnd = groupedTable(
       lateSheet,
       7,
       1,
@@ -1423,7 +1411,7 @@ const exportFilteredWorkbook = async () => {
       ]
     );
 
-    const lateRecordsEndRow = writeGroupedTable(
+    const lateEnd = groupedTable(
       lateSheet,
       7,
       6,
@@ -1449,11 +1437,9 @@ const exportFilteredWorkbook = async () => {
       ]
     );
 
-    const exemptionStartRow = Math.max(summaryEndRow, lateRecordsEndRow) + 2;
-
-    writeGroupedTable(
+    groupedTable(
       lateSheet,
-      exemptionStartRow,
+      Math.max(summaryEnd, lateEnd) + 2,
       1,
       4,
       "EXEMPTIONS BY HR",
@@ -1483,11 +1469,11 @@ const exportFilteredWorkbook = async () => {
       `Absence and Undertime Monitoring  |  Report Scope: ${reportScope}  |  Generated: ${generatedDate}`
     );
 
-    setCard(absenceSheet, "A4:B4", "Absences", absences.length, fills.cardBlue, "0057D9");
-    setCard(absenceSheet, "D4:E4", "System Undertime", generatedUndertimes.length, fills.cardGreen, "008037");
-    setCard(absenceSheet, "G4:H4", "Manual Undertime", manualUndertimes.length, fills.cardYellow, "9A5B00");
+    setCard(absenceSheet, 4, 1, 2, "Absences", absences.length, colors.blueCard, "0057D9");
+    setCard(absenceSheet, 4, 4, 5, "System Undertime", generatedUndertimes.length, colors.greenCard, "008037");
+    setCard(absenceSheet, 4, 7, 8, "Manual Undertime", manualUndertimes.length, colors.yellowCard, "9A5B00");
 
-    const absenceEndRow = writeGroupedTable(
+    const absenceEnd = groupedTable(
       absenceSheet,
       7,
       1,
@@ -1513,7 +1499,7 @@ const exportFilteredWorkbook = async () => {
       ]
     );
 
-    const systemEndRow = writeGroupedTable(
+    const systemEnd = groupedTable(
       absenceSheet,
       7,
       6,
@@ -1539,11 +1525,9 @@ const exportFilteredWorkbook = async () => {
       ]
     );
 
-    const manualStartRow = Math.max(absenceEndRow, systemEndRow) + 2;
-
-    writeGroupedTable(
+    groupedTable(
       absenceSheet,
-      manualStartRow,
+      Math.max(absenceEnd, systemEnd) + 2,
       1,
       4,
       "MANUAL UNDERTIME BY HR",
@@ -1603,12 +1587,13 @@ const exportFilteredWorkbook = async () => {
   } catch (error) {
     console.error("Excel export failed:", error);
 
-return {
-  success: false,
-  message: error instanceof Error ? error.message : "Excel export failed.",
-};
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Excel export failed.",
+    };
   }
 };
+
   return (
     <AttendanceContext.Provider
       value={{
