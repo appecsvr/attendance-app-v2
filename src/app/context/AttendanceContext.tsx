@@ -1402,12 +1402,6 @@ const exportFilteredWorkbook = async () => {
           rows: summaryRows(byTeam(lateSummary, "APP")),
           memoColumnIndex: 3,
         },
-        {
-          label: "UNASSIGNED",
-          team: "UNASSIGNED",
-          rows: summaryRows(byTeam(lateSummary, "UNASSIGNED")),
-          memoColumnIndex: 3,
-        },
       ]
     );
 
