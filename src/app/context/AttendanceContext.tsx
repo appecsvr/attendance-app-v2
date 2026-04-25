@@ -981,7 +981,7 @@ const exportFilteredWorkbook = async () => {
       "Caban, Cris",
       "Calicdan, Ednerson",
       "Campita, Justin",
-      "Clemente, Ricardo Jr.",
+      "Clemente Jr., Ricardo",
       "Coste, Welmar",
       "De Jesus, Roy Rolan",
       "Dometita, Bryan Lloyd",
