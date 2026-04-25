@@ -7,6 +7,7 @@ import React, {
   type ReactNode,
 } from "react";
 import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import { useAuth } from "./AuthContext";
 
 export interface LateRecord {
@@ -138,7 +139,7 @@ interface AttendanceState {
   restoreExemption: (id: string) => void;
   restoreManualUndertime: (id: string) => void;
   markAllMemoAlertsAsRead: () => void;
-  exportFilteredWorkbook: () => { success: boolean; message: string };
+  exportFilteredWorkbook: () => Promise<{ success: boolean; message: string }>;
 }
 
 function createId() {
@@ -945,9 +946,110 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
     );
   };
 
-  const exportFilteredWorkbook = () => {
+  const exportFilteredWorkbook = async () => {
     try {
-      const workbook = XLSX.utils.book_new();
+      const response = await fetch("/templates/Export format.xlsx");
+
+      if (!response.ok) {
+        throw new Error("Excel template file was not found in public/templates.");
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(arrayBuffer);
+
+      const lateSheet = workbook.getWorksheet("Late Summary");
+      const absenceSheet = workbook.getWorksheet("Absence & Undertime");
+
+      if (!lateSheet || !absenceSheet) {
+        throw new Error(
+          "Template sheets must be named 'Late Summary' and 'Absence & Undertime'."
+        );
+      }
+
+      const WAIS_EMPLOYEES = [
+        "Agravio, John Maric",
+        "Aquino, Armando",
+        "Cantillon, Ma. Louissa",
+        "Codilan, Ian Christopher",
+        "Cruz, Gino",
+        "Cruz, Nathaniel Philip",
+        "Engay, Lovely Jane",
+        "Loterte, Jenny Lyn",
+        "Pascua, Joseph",
+        "Pascual, Lucky Joy",
+        "Pesquerra, Louis Gabriel",
+        "Ramirez, Rejohn",
+        "Raquem, Karl Anthony",
+        "Tapat, Leilani",
+        "Yatsu, Nanako",
+      ];
+
+      const APP_EMPLOYEES = [
+        "Aclan, Junrey",
+        "Azcueta, Jerwin",
+        "Bajar, Joseph",
+        "Bautista, Gerry",
+        "Bayan, Juewars",
+        "Bertulfo, Hermilo",
+        "Bido, Alonzo",
+        "Bonaobra, Davidson",
+        "Cababat, Chesterson",
+        "Caban, Cris",
+        "Calicdan, Ednerson",
+        "Campita, Justin",
+        "Clemente, Ricardo Jr.",
+        "Coste, Welmar",
+        "De Jesus, Roy Rolan",
+        "Dometita, Bryan Lloyd",
+        "Escarcha, Carlito",
+        "Estuaria, Christian",
+        "Francisco, Jhon Mar",
+        "Hiteroza, Isauro",
+        "Magday, Elmer",
+        "Mapa, Arnel",
+        "Meeks, Bryan",
+        "Obligar, Bernal",
+        "Olesco, Alvin",
+        "Omapas Jr., Teddy",
+        "Omegan, Jayson",
+        "Radaza, Marifie",
+        "Samson, John Paul",
+        "Sisbas, Jessie",
+        "Soriano, Ariel",
+        "Suarez, Elmer",
+        "Urbano, Ronald",
+        "Veruela, John Wally",
+        "Zate, Mario",
+      ];
+
+      const normalizeEmployee = (name: string) =>
+        name.trim().replace(/\s+/g, " ").toLowerCase();
+
+      const waisSet = new Set(WAIS_EMPLOYEES.map(normalizeEmployee));
+      const appSet = new Set(APP_EMPLOYEES.map(normalizeEmployee));
+
+      const getTeam = (name: string) => {
+        const clean = normalizeEmployee(name);
+        if (waisSet.has(clean)) return "WAIS";
+        if (appSet.has(clean)) return "APP";
+        return "UNASSIGNED";
+      };
+
+      const sortByName = <T extends { name: string }>(items: T[]) =>
+        [...items].sort((a, b) => a.name.localeCompare(b.name));
+
+      const byTeam = <T extends { name: string }>(items: T[], team: string) =>
+        sortByName(items.filter((item) => getTeam(item.name) === team));
+
+      const totalMinutesLate = lateSummary.reduce(
+        (sum, item) => sum + item.totalMinutesLate,
+        0
+      );
+
+      const memoReviewCount = lateSummary.filter(
+        (item) => item.totalLates >= 4
+      ).length;
 
       const reportScope =
         selectedDayScope !== "all"
@@ -956,220 +1058,404 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
           ? formatMonthLabel(selectedMonthScope)
           : "All Records";
 
-      const generatedAt = new Date().toLocaleString("en-US", {
-        year: "numeric",
+      const generatedAt = new Date().toLocaleDateString("en-US", {
         month: "long",
         day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
+        year: "numeric",
       });
 
-      const noDataRow = (columns: number) => [
-        "No data available for the selected report scope.",
-        ...Array(Math.max(columns - 1, 0)).fill(""),
-      ];
+      const cloneStyle = (cell: ExcelJS.Cell) => ({
+        font: cell.font ? { ...cell.font } : undefined,
+        fill: cell.fill ? { ...cell.fill } : undefined,
+        border: cell.border ? { ...cell.border } : undefined,
+        alignment: cell.alignment ? { ...cell.alignment } : undefined,
+        numFmt: cell.numFmt,
+        protection: cell.protection ? { ...cell.protection } : undefined,
+      });
 
-      const safeSheetName = (name: string) => name.slice(0, 31);
-
-      const addProfessionalSheet = (
-        sheetName: string,
-        title: string,
-        headers: string[],
-        rows: (string | number)[][],
-        widths: number[]
-      ) => {
-        const displayRows = rows.length ? rows : [noDataRow(headers.length)];
-        const tableStartRow = 6;
-        const worksheetRows = [
-          [title],
-          ["Report Scope", reportScope],
-          ["Generated", generatedAt],
-          [],
-          headers,
-          ...displayRows,
-        ];
-
-        const worksheet = XLSX.utils.aoa_to_sheet(worksheetRows);
-
-        worksheet["!cols"] = widths.map((width) => ({ wch: width }));
-        worksheet["!merges"] = [
-          {
-            s: { r: 0, c: 0 },
-            e: { r: 0, c: Math.max(headers.length - 1, 0) },
-          },
-        ];
-        worksheet["!autofilter"] = {
-          ref: XLSX.utils.encode_range({
-            s: { r: tableStartRow - 1, c: 0 },
-            e: {
-              r: Math.max(tableStartRow - 1 + displayRows.length, tableStartRow - 1),
-              c: Math.max(headers.length - 1, 0),
-            },
-          }),
-        };
-        worksheet["!freeze"] = { xSplit: 0, ySplit: tableStartRow };
-
-        XLSX.utils.book_append_sheet(
-          workbook,
-          worksheet,
-          safeSheetName(sheetName)
-        );
+      const applyStyle = (cell: ExcelJS.Cell, style: Partial<ExcelJS.Style>) => {
+        if (style.font) cell.font = style.font;
+        if (style.fill) cell.fill = style.fill;
+        if (style.border) cell.border = style.border;
+        if (style.alignment) cell.alignment = style.alignment;
+        if (style.numFmt) cell.numFmt = style.numFmt;
+        if (style.protection) cell.protection = style.protection;
       };
 
-      const memoReviewRows = lateSummary
-        .filter((item) => item.totalLates >= 4)
-        .map((item) => [
+      const clearRange = (
+        sheet: ExcelJS.Worksheet,
+        startRow: number,
+        endRow: number,
+        startCol: number,
+        endCol: number
+      ) => {
+        for (let row = startRow; row <= endRow; row += 1) {
+          for (let col = startCol; col <= endCol; col += 1) {
+            sheet.getCell(row, col).value = null;
+          }
+        }
+      };
+
+      const writeValue = (
+        sheet: ExcelJS.Worksheet,
+        address: string,
+        value: string | number
+      ) => {
+        sheet.getCell(address).value = value;
+      };
+
+      const writeBlock = (
+        sheet: ExcelJS.Worksheet,
+        startRow: number,
+        startCol: number,
+        rows: (string | number)[][],
+        rowStyleSource: number,
+        memoStatusCol?: number
+      ) => {
+        const baseStyles = rows[0]?.map((_, index) =>
+          cloneStyle(sheet.getCell(rowStyleSource, startCol + index))
+        );
+
+        rows.forEach((row, rowIndex) => {
+          row.forEach((value, colIndex) => {
+            const cell = sheet.getCell(startRow + rowIndex, startCol + colIndex);
+            cell.value = value;
+
+            const baseStyle = baseStyles?.[colIndex];
+            if (baseStyle) applyStyle(cell, baseStyle);
+
+            if (
+              memoStatusCol &&
+              colIndex + 1 === memoStatusCol &&
+              String(value).toLowerCase().includes("memo")
+            ) {
+              cell.font = { ...(cell.font ?? {}), color: { argb: "FFC00000" } };
+              sheet.getRow(startRow + rowIndex).eachCell((rowCell) => {
+                rowCell.fill = {
+                  type: "pattern",
+                  pattern: "solid",
+                  fgColor: { argb: "FFFFF1F1" },
+                };
+              });
+            }
+          });
+        });
+      };
+
+      const writeSectionLabel = (
+        sheet: ExcelJS.Worksheet,
+        row: number,
+        col: number,
+        label: string,
+        templateRow: number,
+        templateCol: number,
+        width = 4
+      ) => {
+        for (let i = 0; i < width; i += 1) {
+          applyStyle(
+            sheet.getCell(row, col + i),
+            cloneStyle(sheet.getCell(templateRow, templateCol + i))
+          );
+        }
+        sheet.getCell(row, col).value = label;
+      };
+
+      const writeHeader = (
+        sheet: ExcelJS.Worksheet,
+        row: number,
+        col: number,
+        headers: string[],
+        templateRow: number,
+        templateCol: number
+      ) => {
+        headers.forEach((header, index) => {
+          const cell = sheet.getCell(row, col + index);
+          cell.value = header;
+          applyStyle(cell, cloneStyle(sheet.getCell(templateRow, templateCol + index)));
+        });
+      };
+
+      clearRange(lateSheet, 10, 250, 1, 12);
+      clearRange(absenceSheet, 10, 250, 1, 10);
+
+      writeValue(lateSheet, "A1", "TIMECORE HR ATTENDANCE REPORT");
+      writeValue(
+        lateSheet,
+        "D2",
+        `Late Summary / Late Records / Exemptions | Report Scope: ${reportScope} | Generated: ${generatedAt}`
+      );
+      writeValue(lateSheet, "B4", lateRecords.length);
+      writeValue(lateSheet, "F4", lateSummary.length);
+      writeValue(lateSheet, "J4", totalMinutesLate);
+      writeValue(lateSheet, "N4", memoReviewCount);
+
+      writeValue(absenceSheet, "A1", "TIMECORE HR ATTENDANCE REPORT");
+      writeValue(
+        absenceSheet,
+        "D2",
+        `Absence and Undertime Monitoring | Report Scope: ${reportScope} | Generated: ${generatedAt}`
+      );
+
+      const summaryRows = (items: LateSummary[]) =>
+        items.map((item) => [
           item.name,
           item.totalLates,
           item.totalMinutesLate,
-          "For memo review",
+          item.totalLates >= 4 ? "For Memo Review" : "Normal",
         ]);
 
-      const totalLateMinutes = lateSummary.reduce(
-        (sum, item) => sum + item.totalMinutesLate,
-        0
-      );
-
-      const executiveRows: (string | number)[][] = [
-        ["Total Uploaded Files", uploadedFiles.length, ""],
-        ["Total Late Records", lateRecords.length, ""],
-        ["Employees With Late Records", lateSummary.length, ""],
-        ["Total Late Minutes", totalLateMinutes, ""],
-        ["Employees For Memo Review", memoReviewRows.length, "4 or more lates"],
-        ["Exemptions", exemptions.length, ""],
-        ["Absences", absences.length, ""],
-        ["System Undertime Records", generatedUndertimes.length, ""],
-        ["Manual Undertime Records", manualUndertimes.length, ""],
-        [],
-        ["Memo Review List", "", ""],
-        ["Employee", "Total Lates", "Total Minutes Late"],
-        ...(memoReviewRows.length
-          ? memoReviewRows.map((row) => [row[0], row[1], row[2]])
-          : [["No employees reached memo threshold.", "", ""]]),
-      ];
-
-      addProfessionalSheet(
-        "Executive Summary",
-        "TIMECORE ATTENDANCE REPORT - EXECUTIVE SUMMARY",
-        ["Metric", "Value", "Notes"],
-        executiveRows,
-        [34, 18, 32]
-      );
-
-      addProfessionalSheet(
-        "Late Records",
-        "TIMECORE ATTENDANCE REPORT - LATE RECORDS",
-        [
-          "Employee",
-          "Date",
-          "Time In",
-          "Minutes Late",
-          "Seconds Late",
-          "Total Seconds Late",
-          "Source File",
-        ],
-        lateRecords.map((record) => [
+      const lateRows = (items: LateRecord[]) =>
+        items.map((record) => [
           record.name,
           record.date,
           record.timeIn,
           record.minutesLate,
           record.secondsLate,
-          record.totalSecondsLate,
           record.sourceFileName,
-        ]),
-        [28, 14, 16, 16, 16, 18, 28]
-      );
+        ]);
 
-      addProfessionalSheet(
-        "Late Summary",
-        "TIMECORE ATTENDANCE REPORT - LATE SUMMARY",
-        ["Employee", "Total Lates", "Total Minutes Late", "Memo Status"],
-        lateSummary.map((item) => [
-          item.name,
-          item.totalLates,
-          item.totalMinutesLate,
-          item.totalLates >= 4 ? "For memo review" : "Normal",
-        ]),
-        [30, 16, 20, 20]
-      );
+      const exemptionRows = (items: Exemption[]) =>
+        items.map((item) => [item.name, item.date, item.reason]);
 
-      addProfessionalSheet(
-        "Exemptions",
-        "TIMECORE ATTENDANCE REPORT - EXEMPTIONS",
-        ["Employee", "Date", "Minutes Late", "Reason"],
-        exemptions.map((item) => [
-          item.name,
-          item.date,
-          item.minutesLate ?? "",
-          item.reason,
-        ]),
-        [30, 14, 16, 46]
-      );
+      const absenceRows = (items: AbsentRecord[]) =>
+        items.map((item) => [item.name, item.date, item.reason, "Manual Entry"]);
 
-      addProfessionalSheet(
-        "Absences",
-        "TIMECORE ATTENDANCE REPORT - ABSENCES",
-        ["Employee", "Date", "Reason"],
-        absences.map((item) => [item.name, item.date, item.reason]),
-        [30, 14, 46]
-      );
-
-      addProfessionalSheet(
-        "System Undertime",
-        "TIMECORE ATTENDANCE REPORT - SYSTEM UNDERTIME",
-        ["Employee", "Date", "Time In", "Source File"],
-        generatedUndertimes.map((item) => [
+      const systemUndertimeRows = (items: GeneratedUndertime[]) =>
+        items.map((item) => [
           item.name,
           item.date,
           item.timeIn,
           item.sourceFileName,
-        ]),
-        [30, 14, 16, 28]
-      );
+        ]);
 
-      addProfessionalSheet(
-        "Manual Undertime",
-        "TIMECORE ATTENDANCE REPORT - MANUAL UNDERTIME",
-        [
-          "Employee",
-          "Date",
-          "Undertime Hours",
-          "Reason",
-          "Source Type",
-          "Original Time In",
-          "Manual Override",
-        ],
-        manualUndertimes.map((item) => [
+      const manualUndertimeRows = (items: UndertimeRecord[]) =>
+        items.map((item) => [
           item.name,
           item.date,
-          item.undertimeHours,
           item.reason,
-          item.sourceType ?? "Manual entry",
-          item.originalTimeIn ?? "",
-          item.isManualOverride ? "Yes" : "No",
-        ]),
-        [30, 14, 18, 46, 20, 18, 18]
-      );
+          item.undertimeHours,
+        ]);
 
-      addProfessionalSheet(
-        "Uploaded Files",
-        "TIMECORE ATTENDANCE REPORT - UPLOADED FILES",
-        ["File Name", "Uploaded At", "Late Records", "System Undertime"],
-        uploadedFiles.map((item) => [
-          item.fileName,
-          new Date(item.uploadedAt).toLocaleString("en-US"),
-          item.lateRecords.length,
-          item.generatedUndertimes.length,
-        ]),
-        [36, 26, 16, 20]
-      );
+      let summaryRow = 10;
+      [
+        ["WAIS (ADMIN)", "WAIS", 8, 9],
+        ["APP (PRODUCTION)", "APP", 21, 22],
+        ["UNASSIGNED", "UNASSIGNED", 39, 40],
+      ].forEach(([label, team, labelTemplateRow, headerTemplateRow]) => {
+        const rows = summaryRows(byTeam(lateSummary, team as string));
+        if (summaryRow !== 10) summaryRow += 2;
+        writeSectionLabel(
+          lateSheet,
+          summaryRow - 2,
+          1,
+          label as string,
+          labelTemplateRow as number,
+          1
+        );
+        writeHeader(
+          lateSheet,
+          summaryRow - 1,
+          1,
+          ["Employee", "Total Lates", "Total Minutes Late", "Memo Status"],
+          headerTemplateRow as number,
+          1
+        );
+        writeBlock(
+          lateSheet,
+          summaryRow,
+          1,
+          rows.length ? rows : [["No data", "", "", ""]],
+          summaryRow,
+          4
+        );
+        summaryRow += Math.max(rows.length, 1);
+      });
 
-      workbook.Props = {
-        Title: `TimeCore Attendance Report - ${reportScope}`,
-        Subject: "Attendance Report",
-        Author: "TimeCore HR Attendance System",
-        CreatedDate: new Date(),
-      };
+      let recordRow = 10;
+      [
+        ["WAIS (ADMIN)", "WAIS", 8, 9],
+        ["APP (PRODUCTION)", "APP", 21, 22],
+        ["UNASSIGNED", "UNASSIGNED", 39, 40],
+      ].forEach(([label, team, labelTemplateRow, headerTemplateRow]) => {
+        const rows = lateRows(byTeam(lateRecords, team as string));
+        if (recordRow !== 10) recordRow += 2;
+        writeSectionLabel(
+          lateSheet,
+          recordRow - 2,
+          7,
+          label as string,
+          labelTemplateRow as number,
+          7,
+          6
+        );
+        writeHeader(
+          lateSheet,
+          recordRow - 1,
+          7,
+          ["Employee", "Date", "Time In", "Minutes Late", "Seconds Late", "Source File"],
+          headerTemplateRow as number,
+          7
+        );
+        writeBlock(
+          lateSheet,
+          recordRow,
+          7,
+          rows.length ? rows : [["No data", "", "", "", "", ""]],
+          recordRow
+        );
+        recordRow += Math.max(rows.length, 1);
+      });
+
+      let exemptionRow = Math.max(summaryRow, recordRow) + 3;
+      writeSectionLabel(lateSheet, exemptionRow, 1, "EXEMPTIONS", 7, 1, 4);
+      exemptionRow += 2;
+      [
+        ["WAIS (ADMIN)", "WAIS", 8, 9],
+        ["APP (PRODUCTION)", "APP", 21, 22],
+        ["UNASSIGNED", "UNASSIGNED", 39, 40],
+      ].forEach(([label, team, labelTemplateRow, headerTemplateRow]) => {
+        const rows = exemptionRows(byTeam(exemptions, team as string));
+        writeSectionLabel(
+          lateSheet,
+          exemptionRow,
+          1,
+          label as string,
+          labelTemplateRow as number,
+          1,
+          3
+        );
+        writeHeader(
+          lateSheet,
+          exemptionRow + 1,
+          1,
+          ["Employee", "Date", "Reason"],
+          headerTemplateRow as number,
+          1
+        );
+        writeBlock(
+          lateSheet,
+          exemptionRow + 2,
+          1,
+          rows.length ? rows : [["No data", "", ""]],
+          exemptionRow + 2
+        );
+        exemptionRow += Math.max(rows.length, 1) + 4;
+      });
+
+      let absenceRow = 10;
+      [
+        ["WAIS (ADMIN)", "WAIS", 8, 9],
+        ["APP (PRODUCTION)", "APP", 12, 13],
+        ["UNASSIGNED", "UNASSIGNED", 23, 24],
+      ].forEach(([label, team, labelTemplateRow, headerTemplateRow]) => {
+        const rows = absenceRows(byTeam(absences, team as string));
+        if (absenceRow !== 10) absenceRow += 2;
+        writeSectionLabel(
+          absenceSheet,
+          absenceRow - 2,
+          1,
+          label as string,
+          labelTemplateRow as number,
+          1,
+          4
+        );
+        writeHeader(
+          absenceSheet,
+          absenceRow - 1,
+          1,
+          ["Employee", "Date", "Reason", "Source"],
+          headerTemplateRow as number,
+          1
+        );
+        writeBlock(
+          absenceSheet,
+          absenceRow,
+          1,
+          rows.length ? rows : [["No data", "", "", ""]],
+          absenceRow
+        );
+        absenceRow += Math.max(rows.length, 1);
+      });
+
+      let systemRow = 10;
+      [
+        ["WAIS (ADMIN)", "WAIS", 8, 9],
+        ["APP (PRODUCTION)", "APP", 12, 13],
+        ["UNASSIGNED", "UNASSIGNED", 23, 24],
+      ].forEach(([label, team, labelTemplateRow, headerTemplateRow]) => {
+        const rows = systemUndertimeRows(byTeam(generatedUndertimes, team as string));
+        if (systemRow !== 10) systemRow += 2;
+        writeSectionLabel(
+          absenceSheet,
+          systemRow - 2,
+          6,
+          label as string,
+          labelTemplateRow as number,
+          6,
+          4
+        );
+        writeHeader(
+          absenceSheet,
+          systemRow - 1,
+          6,
+          ["Employee", "Date", "Time In", "Source File"],
+          headerTemplateRow as number,
+          6
+        );
+        writeBlock(
+          absenceSheet,
+          systemRow,
+          6,
+          rows.length ? rows : [["No data", "", "", ""]],
+          systemRow
+        );
+        systemRow += Math.max(rows.length, 1);
+      });
+
+      let manualRow = Math.max(absenceRow, systemRow) + 3;
+      writeSectionLabel(absenceSheet, manualRow, 1, "MANUAL UNDERTIME BY HR", 18, 1, 4);
+      manualRow += 2;
+      [
+        ["WAIS (ADMIN)", "WAIS", 19, 20],
+        ["APP (PRODUCTION)", "APP", 23, 24],
+        ["UNASSIGNED", "UNASSIGNED", 23, 24],
+      ].forEach(([label, team, labelTemplateRow, headerTemplateRow]) => {
+        const rows = manualUndertimeRows(byTeam(manualUndertimes, team as string));
+        writeSectionLabel(
+          absenceSheet,
+          manualRow,
+          1,
+          label as string,
+          labelTemplateRow as number,
+          1,
+          4
+        );
+        writeHeader(
+          absenceSheet,
+          manualRow + 1,
+          1,
+          ["Employee", "Date", "Reason", "Hours"],
+          headerTemplateRow as number,
+          1
+        );
+        writeBlock(
+          absenceSheet,
+          manualRow + 2,
+          1,
+          rows.length ? rows : [["No data", "", "", ""]],
+          manualRow + 2
+        );
+        manualRow += Math.max(rows.length, 1) + 4;
+      });
+
+      workbook.creator = "TimeCore HR Attendance System";
+      workbook.created = new Date();
+      workbook.modified = new Date();
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
 
       const suffix =
         selectedDayScope !== "all"
@@ -1182,7 +1468,13 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
               .replace(/\s+/g, "-")
           : "all-records";
 
-      XLSX.writeFile(workbook, `timecore-attendance-report-${suffix}.xlsx`);
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `timecore-attendance-report-${suffix}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href);
 
       return {
         success: true,
@@ -1190,9 +1482,10 @@ export const AttendanceProvider = ({ children }: { children: ReactNode }) => {
       };
     } catch (error) {
       console.error("Excel export failed:", error);
+
       return {
         success: false,
-        message: "Excel export failed. Please try again.",
+        message: "Excel export failed. Please check your Excel template.",
       };
     }
   };
