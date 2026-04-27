@@ -37,6 +37,8 @@ const MASTER_EMPLOYEES: MasterEmployee[] = [
   { fullName: "Bayan, Juewars" },
   { fullName: "Bertulfo, Hermilo" }, 
   { fullName: "Bido, Alonzo" },
+  { fullName: "Bonaobra, Davidson" },
+  { fullName: "Cababat, Chesterson" },
   { fullName: "Caban, Cris" },        
   { fullName: "Calicdan, Ednerson" },
   { fullName: "Campita, Justin" },
